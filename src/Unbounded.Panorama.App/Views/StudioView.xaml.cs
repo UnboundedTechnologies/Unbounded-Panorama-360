@@ -56,7 +56,15 @@ public partial class StudioView : UserControl
         Ink.PreviewMouseLeftButtonUp += OnInkUp;
         SelectMode.IsChecked = true;
         PenTool.IsChecked = true;
+
+        // Clip the screen to the bezel's rounded opening (ClipToBounds only clips to a rectangle,
+        // which let the square corners of the background show over the rounded frame).
+        Screen.SizeChanged += (_, e) =>
+            Screen.Clip = new RectangleGeometry(new Rect(e.NewSize), ScreenCornerRadius, ScreenCornerRadius);
     }
+
+    /// <summary>Inner radius of the bezel: its 58 px corner radius minus the 3 px edge line.</summary>
+    private const double ScreenCornerRadius = 55;
 
     private MainViewModel Vm => _vm ??= (MainViewModel)DataContext;
 
