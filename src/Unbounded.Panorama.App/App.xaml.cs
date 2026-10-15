@@ -15,6 +15,29 @@ public partial class App : Application
 
     private Mutex? _instanceMutex;
     private EventWaitHandle? _showSignal;
+    private EventWaitHandle? _quitSignal;
+
+    /// <summary>Signals the running copy to quit and waits (up to 20 s) to own the single-instance mutex.</summary>
+    private bool TakeOverFromRunningInstance()
+    {
+        try
+        {
+            using var quit = EventWaitHandle.OpenExisting(InstanceName + ".Quit");
+            quit.Set();
+        }
+        catch (WaitHandleCannotBeOpenedException)
+        {
+            // An older build without the quit signal: it has to be exited by hand.
+        }
+        try
+        {
+            return _instanceMutex!.WaitOne(TimeSpan.FromSeconds(20));
+        }
+        catch (AbandonedMutexException)
+        {
+            return true; // the previous owner ended without releasing it; we own it now
+        }
+    }
     private SensorHub? _sensors;
     private DisplayEngine? _engine;
     private TrayIcon? _tray;
@@ -29,17 +52,31 @@ public partial class App : Application
         _instanceMutex = new Mutex(true, InstanceName, out var first);
         if (!first)
         {
-            // Already running: ask that instance to show its window.
-            try
+            if (e.Args.Contains("--replace", StringComparer.OrdinalIgnoreCase))
             {
-                using var signal = EventWaitHandle.OpenExisting(InstanceName + ".Show");
-                signal.Set();
+                // A newer build: ask the running copy to exit cleanly (closing the USB session), then take over.
+                if (!TakeOverFromRunningInstance())
+                {
+                    MessageBox.Show("The running copy did not close. Exit it from the tray and start again.", "Unbounded Panorama 360",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Shutdown();
+                    return;
+                }
             }
-            catch (WaitHandleCannotBeOpenedException)
+            else
             {
+                // Already running: ask that instance to show its window.
+                try
+                {
+                    using var signal = EventWaitHandle.OpenExisting(InstanceName + ".Show");
+                    signal.Set();
+                }
+                catch (WaitHandleCannotBeOpenedException)
+                {
+                }
+                Shutdown();
+                return;
             }
-            Shutdown();
-            return;
         }
         _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceName + ".Show");
         var listener = new Thread(() =>
@@ -52,6 +89,14 @@ public partial class App : Application
             }
         }) { IsBackground = true };
         listener.Start();
+
+        _quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceName + ".Quit");
+        var quitListener = new Thread(() =>
+        {
+            if (_quitSignal.WaitOne() && !_exiting)
+                Dispatcher.BeginInvoke(ExitApp);
+        }) { IsBackground = true };
+        quitListener.Start();
 
         DispatcherUnhandledException += OnUnhandled;
 
@@ -98,9 +143,18 @@ public partial class App : Application
         _tray?.Dispose();
         _window?.Close();
         if (_engine is not null)
-            await _engine.DisposeAsync();
+            await _engine.DisposeAsync(); // closes the USB session
         _sensors?.Dispose();
         _showSignal?.Set();
+        // Only now let a replacing copy take over: the cooler is free.
+        try
+        {
+            _instanceMutex?.ReleaseMutex();
+        }
+        catch (ApplicationException)
+        {
+            // Not owned on this thread (should not happen); the OS releases it at exit anyway.
+        }
         Shutdown();
     }
 

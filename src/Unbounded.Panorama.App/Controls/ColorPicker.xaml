@@ -1,0 +1,127 @@
+<UserControl x:Class="Unbounded.Panorama.App.Controls.ColorPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+    <Grid>
+        <DockPanel>
+            <!-- Swatch: opens the picker -->
+            <ToggleButton x:Name="Opener" Width="32" Height="32" Margin="0,0,8,0" DockPanel.Dock="Left" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                          ToolTip="Open the colour picker">
+                <ToggleButton.Template>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="b" CornerRadius="9" BorderThickness="1" BorderBrush="{StaticResource Line}">
+                            <Border.Background>
+                                <SolidColorBrush Color="{Binding CurrentColor, ElementName=Root}" />
+                            </Border.Background>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                <Setter TargetName="b" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </ToggleButton.Template>
+            </ToggleButton>
+            <TextBox x:Name="HexBox" ToolTip="Colour as #RRGGBB" LostFocus="OnHexBoxCommit" KeyDown="OnHexBoxKey" />
+        </DockPanel>
+
+        <Popup x:Name="Pop" PlacementTarget="{Binding ElementName=Opener}" Placement="Bottom" VerticalOffset="6" StaysOpen="False"
+               AllowsTransparency="True" PopupAnimation="Fade" IsOpen="{Binding IsChecked, ElementName=Opener, Mode=TwoWay}">
+            <Border Background="#F20D1424" BorderBrush="{StaticResource LineHover}" BorderThickness="1" CornerRadius="14" Padding="14" Width="282">
+                <StackPanel>
+                    <!-- Saturation (x) / brightness (y) -->
+                    <Grid x:Name="SvArea" Height="170" Cursor="Cross" ClipToBounds="True"
+                          MouseLeftButtonDown="OnSvDown" MouseMove="OnSvMove" MouseLeftButtonUp="OnSvUp">
+                        <Rectangle RadiusX="8" RadiusY="8">
+                            <Rectangle.Fill>
+                                <SolidColorBrush x:Name="HueFill" Color="Red" />
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle RadiusX="8" RadiusY="8">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FFFFFFFF" Offset="0" />
+                                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Rectangle RadiusX="8" RadiusY="8">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#00000000" Offset="0" />
+                                    <GradientStop Color="#FF000000" Offset="1" />
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Canvas IsHitTestVisible="False">
+                            <Ellipse x:Name="SvMarker" Width="16" Height="16" Stroke="White" StrokeThickness="2.5">
+                                <Ellipse.Effect>
+                                    <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.8" />
+                                </Ellipse.Effect>
+                            </Ellipse>
+                        </Canvas>
+                    </Grid>
+
+                    <!-- Hue -->
+                    <Grid x:Name="HueArea" Height="16" Margin="0,12,0,0" Cursor="Hand"
+                          MouseLeftButtonDown="OnHueDown" MouseMove="OnHueMove" MouseLeftButtonUp="OnHueUp">
+                        <Rectangle RadiusX="8" RadiusY="8">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF0000" Offset="0" />
+                                    <GradientStop Color="#FFFF00" Offset="0.1667" />
+                                    <GradientStop Color="#00FF00" Offset="0.3333" />
+                                    <GradientStop Color="#00FFFF" Offset="0.5" />
+                                    <GradientStop Color="#0000FF" Offset="0.6667" />
+                                    <GradientStop Color="#FF00FF" Offset="0.8333" />
+                                    <GradientStop Color="#FF0000" Offset="1" />
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <Canvas IsHitTestVisible="False">
+                            <Border x:Name="HueMarker" Width="8" Height="22" Canvas.Top="-3" CornerRadius="4" BorderBrush="White" BorderThickness="2.5">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.8" />
+                                </Border.Effect>
+                            </Border>
+                        </Canvas>
+                    </Grid>
+
+                    <!-- Exact values -->
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="92" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="R" Style="{StaticResource Label}" Margin="0,0,0,4" />
+                            <TextBox x:Name="RBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Red 0-255" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="G" Style="{StaticResource Label}" Margin="0,0,0,4" />
+                            <TextBox x:Name="GBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Green 0-255" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="B" Style="{StaticResource Label}" Margin="0,0,0,4" />
+                            <TextBox x:Name="BBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Blue 0-255" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="HEX" Style="{StaticResource Label}" Margin="0,0,0,4" />
+                            <TextBox x:Name="PopHexBox" Padding="6,0" LostFocus="OnHexBoxCommit" KeyDown="OnHexBoxKey" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="HsvText" Foreground="{StaticResource Muted}" FontSize="11" FontFamily="Cascadia Mono, Consolas" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

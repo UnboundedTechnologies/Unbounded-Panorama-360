@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Unbounded.Panorama.App.ViewModels"
-             xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core">
+             xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core"
+             xmlns:controls="clr-namespace:Unbounded.Panorama.App.Controls">
     <UserControl.Resources>
         <DataTemplate x:Key="EnumItem">
             <TextBlock Text="{Binding Converter={StaticResource EnumLabel}}" />
@@ -56,7 +57,14 @@
                         <TextBlock Text="Your saved designs and starter templates" Style="{StaticResource Label}" Margin="0,2,0,8" />
                         <DockPanel>
                             <Button Content="Load" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right" Command="{Binding LoadPresetCommand}" />
-                            <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}" DisplayMemberPath="Display" />
+                            <!-- Explicit template: the themed ComboBox shows SelectionBoxItem through ItemTemplate, not DisplayMemberPath. -->
+                            <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </DockPanel>
                         <DockPanel Margin="0,8,0,0">
                             <Button Content="Delete" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right" Command="{Binding DeletePresetCommand}"
@@ -372,11 +380,8 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <Border Width="22" Height="22" CornerRadius="11" Margin="6,0" BorderBrush="White" BorderThickness="2" ToolTip="Current colour">
-                            <Border.Background>
-                                <SolidColorBrush Color="{Binding DrawColor}" />
-                            </Border.Background>
-                        </Border>
+                        <controls:ColorPicker Width="124" Margin="6,0,0,0" VerticalAlignment="Center" Hex="{Binding DrawColor, Mode=TwoWay}"
+                                              ToolTip="Drawing colour: click the swatch for the picker" />
                         <Border Style="{StaticResource Sep}" />
                         <Slider Width="110" Minimum="2" Maximum="80" Value="{Binding DrawSize}" VerticalAlignment="Center" ToolTip="Thickness" />
                         <TextBlock Text="{Binding DrawSize, StringFormat={}{0:0} px}" Width="44" Margin="6,0,0,0" VerticalAlignment="Center"
@@ -709,11 +714,8 @@
                                     </DockPanel>
                                     <Slider Minimum="16" Maximum="400" Value="{Binding Size}" IsSnapToTickEnabled="True" TickFrequency="2" />
 
-                                    <TextBlock Text="Colour" Style="{StaticResource Label}" />
-                                    <DockPanel>
-                                        <Border Width="32" Height="32" CornerRadius="9" Background="{Binding ColorBrush}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0" />
-                                        <TextBox Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
-                                    </DockPanel>
+                                    <TextBlock Text="Colour (click the swatch for the picker)" Style="{StaticResource Label}" />
+                                    <controls:ColorPicker Hex="{Binding Color, Mode=TwoWay}" />
                                     <ItemsControl ItemsSource="{Binding DataContext.Swatches, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,10,0,0">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -744,11 +746,11 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel>
                                                 <TextBlock Text="From" Style="{StaticResource Label}" />
-                                                <TextBox Text="{Binding BadgeFrom, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                                <controls:ColorPicker Hex="{Binding BadgeFrom, Mode=TwoWay}" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="To" Style="{StaticResource Label}" />
-                                                <TextBox Text="{Binding BadgeTo, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                                <controls:ColorPicker Hex="{Binding BadgeTo, Mode=TwoWay}" />
                                             </StackPanel>
                                         </Grid>
                                         <ItemsControl ItemsSource="{Binding DataContext.BadgePresets, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,10,0,0">
