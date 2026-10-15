@@ -1,0 +1,475 @@
+﻿<Window x:Class="Unbounded.Panorama.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Unbounded.Panorama.App.ViewModels"
+        xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core"
+        Title="Unbounded Panorama 360" Width="1440" Height="920" MinWidth="1100" MinHeight="680"
+        Background="{StaticResource Bg}" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <DataTemplate x:Key="EnumItem">
+            <TextBlock Text="{Binding Converter={StaticResource EnumLabel}}" />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================================================ top bar -->
+        <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+            <Grid Margin="18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="18" Height="28" CornerRadius="5" Background="{StaticResource AccentGradient}" Margin="0,0,12,0" />
+                    <StackPanel>
+                        <TextBlock Text="Unbounded Panorama 360" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="Anything, anywhere on your cooler" FontSize="11" Foreground="{StaticResource Muted}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="28,0,0,0">
+                    <Border Background="{StaticResource Field}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="14" Padding="12,5">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="{Binding EngineState, Converter={StaticResource StateBrush}}" Margin="0,0,8,0" />
+                            <TextBlock Text="{Binding EngineDetail}" FontSize="12" />
+                        </StackPanel>
+                    </Border>
+                    <Button Content="Close KANALI" Style="{StaticResource Warn}" Margin="10,0,0,0" Command="{Binding CloseKanaliCommand}"
+                            Visibility="{Binding IsKanaliBlocking, Converter={StaticResource Visible}}"
+                            ToolTip="KANALI owns the cooler while it runs. Closing it lets this app take over." />
+                </StackPanel>
+
+                <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12"
+                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0" TextTrimming="CharacterEllipsis" />
+
+                <Button Grid.Column="3" Style="{StaticResource Primary}" Command="{Binding ApplyCommand}" VerticalAlignment="Center"
+                        ToolTip="Send the design (and background) to the cooler">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Apply to cooler" Foreground="#06101F" FontWeight="SemiBold" />
+                        <Ellipse Width="7" Height="7" Fill="#06101F" Margin="8,0,0,0" VerticalAlignment="Center"
+                                 Visibility="{Binding BackgroundDirty, Converter={StaticResource Visible}}" ToolTip="Background changed since last apply" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="310" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="350" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ======================================================== left panel -->
+            <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <!-- Screen -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Screen" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="Orientation" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding Orientations}" SelectedItem="{Binding Orientation}" ItemTemplate="{StaticResource EnumItem}" />
+                                <DockPanel Margin="0,10,0,4">
+                                    <TextBlock Text="{Binding Brightness, StringFormat={}{0}%}" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" FontSize="11.5" />
+                                    <TextBlock Text="Brightness" Foreground="{StaticResource Muted}" FontSize="11.5" />
+                                </DockPanel>
+                                <Slider Minimum="0" Maximum="100" Value="{Binding Brightness, Delay=200}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                                <CheckBox Content="Fahrenheit (°F)" IsChecked="{Binding Fahrenheit}" Margin="0,12,0,0" />
+                                <CheckBox Content="Start with Windows" IsChecked="{Binding StartWithWindows}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Background -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Background" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="{Binding BackgroundName}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,4,0,8" />
+                                <WrapPanel>
+                                    <Button Content="Choose image / video…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
+                                    <Button Content="Clear" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}"
+                                            Visibility="{Binding HasBackground, Converter={StaticResource Visible}}" />
+                                </WrapPanel>
+                                <StackPanel Visibility="{Binding HasBackground, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="Sizing" Style="{StaticResource Label}" />
+                                    <ComboBox ItemsSource="{Binding Fits}" SelectedItem="{Binding BackgroundFit}" ItemTemplate="{StaticResource EnumItem}" />
+                                    <TextBlock Text="Crop position — horizontal / vertical" Style="{StaticResource Label}" />
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding CropX, Delay=300}" />
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding CropY, Delay=300}" Margin="0,6,0,0" />
+                                    <StackPanel Visibility="{Binding IsVideoBackground, Converter={StaticResource Visible}}">
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Start (s)" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding StartSeconds, UpdateSourceTrigger=LostFocus}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Length (s, empty = all)" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding DurationSeconds, UpdateSourceTrigger=LostFocus, TargetNullValue=''}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Widgets -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <TextBlock Text="{Binding WidgetCount}" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center" />
+                                    <TextBlock Text="Widgets" Style="{StaticResource SectionTitle}" />
+                                </DockPanel>
+                                <WrapPanel Margin="0,8,0,4">
+                                    <Button Content="+ Text" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Text}" />
+                                    <Button Content="+ Sensor" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Sensor}" />
+                                    <Button Content="+ Clock" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Clock}" />
+                                    <Button Content="+ Date" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Date}" />
+                                    <Button Content="+ CPU badge" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.CpuName}" />
+                                    <Button Content="+ GPU badge" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.GpuName}" />
+                                </WrapPanel>
+                                <ListBox ItemsSource="{Binding Widgets}" SelectedItem="{Binding SelectedWidget}" Background="Transparent" BorderThickness="0"
+                                         ItemContainerStyle="{StaticResource WidgetListItem}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:WidgetViewModel}">
+                                            <DockPanel>
+                                                <Border Width="24" Height="24" CornerRadius="6" Background="#1F2838" Margin="0,0,10,0">
+                                                    <TextBlock Text="{Binding Kind}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" Foreground="{Binding ColorBrush}" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ======================================================== canvas -->
+            <Grid Grid.Column="1" Margin="24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Viewbox Stretch="Uniform">
+                    <Border CornerRadius="60" Background="#000000" BorderBrush="#2A3243" BorderThickness="10" Padding="0" ClipToBounds="True">
+                        <Grid x:Name="Screen" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" Background="Black" ClipToBounds="True"
+                              MouseLeftButtonDown="OnScreenMouseDown">
+                            <Image Source="{Binding BackgroundPreview}" Stretch="Fill" IsHitTestVisible="False" />
+
+                            <!-- Where the screen bends onto the curved front (measured on hardware, portrait). -->
+                            <Grid IsHitTestVisible="False" Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
+                                <Line X1="0" X2="1080" Y1="1100" Y2="1100" Stroke="#5522D3EE" StrokeThickness="3" StrokeDashArray="8 8" />
+                                <TextBlock Text="curve starts" Foreground="#8822D3EE" FontSize="26" Margin="16,1060,0,0" />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding Widgets}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <Canvas />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:WidgetViewModel}">
+                                        <Grid Width="{Binding Width}" Height="{Binding Height}">
+                                            <!-- Move: drag anywhere on the widget -->
+                                            <Thumb DragStarted="OnWidgetDragStarted" DragDelta="OnWidgetDragDelta" Cursor="SizeAll">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Grid Background="Transparent">
+                                                            <Border x:Name="sel" BorderThickness="3" BorderBrush="Transparent" CornerRadius="6" Margin="-6" />
+                                                            <Border Background="{Binding BadgeBrush}" CornerRadius="{Binding BadgeCorner}"
+                                                                    HorizontalAlignment="{Binding HorizontalAlign}" VerticalAlignment="Top">
+                                                                <Border.Padding>
+                                                                    <MultiBinding Converter="{StaticResource BadgePadding}">
+                                                                        <Binding Path="Badge" />
+                                                                        <Binding Path="Size" />
+                                                                    </MultiBinding>
+                                                                </Border.Padding>
+                                                                <TextBlock Text="{Binding PreviewText}" Foreground="{Binding ColorBrush}" FontSize="{Binding Size}"
+                                                                           FontWeight="{Binding FontWeightValue}" FontFamily="{x:Static vm:WidgetViewModel.Roboto}"
+                                                                           TextOptions.TextFormattingMode="Ideal" TextWrapping="NoWrap" />
+                                                            </Border>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter TargetName="sel" Property="BorderBrush" Value="#4F8CFF" />
+                                                            </DataTrigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="sel" Property="Background" Value="#144F8CFF" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                            <!-- Resize width: right edge handle -->
+                                            <Thumb HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="24" Margin="0,0,-18,0" Cursor="SizeWE"
+                                                   DragDelta="OnWidgetResizeDelta" Visibility="{Binding IsSelected, Converter={StaticResource Visible}}">
+                                                <Thumb.Template>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Border Background="#4F8CFF" CornerRadius="6" Width="12" />
+                                                    </ControlTemplate>
+                                                </Thumb.Template>
+                                            </Thumb>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+                </Viewbox>
+                <TextBlock Grid.Row="1" HorizontalAlignment="Center" Margin="0,12,0,0" FontSize="11.5" Foreground="{StaticResource Muted}"
+                           Text="Drag widgets to move · drag the blue edge to resize · arrow keys nudge (Shift = 10 px) · Delete removes · Ctrl + wheel resizes text" />
+            </Grid>
+
+            <!-- ======================================================== right panel -->
+            <Border Grid.Column="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="160" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Select a widget to edit it, or add one on the left." Foreground="{StaticResource Muted}" FontSize="12.5"
+                               TextWrapping="Wrap" Margin="20" Visibility="{Binding SelectedWidget, Converter={StaticResource Hidden}}" />
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding SelectedWidget, Converter={StaticResource Visible}}">
+                        <StackPanel Margin="14" DataContext="{Binding SelectedWidget}">
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button Content="Delete" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right"
+                                                Command="{Binding DataContext.DeleteWidgetCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        <Button Content="Duplicate" Style="{StaticResource Chip}" Margin="0" DockPanel.Dock="Right"
+                                                Command="{Binding DataContext.DuplicateWidgetCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                        <TextBlock Text="Content" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock Text="Shows" Style="{StaticResource Label}" />
+                                    <ComboBox ItemsSource="{Binding DataContext.ContentKinds, RelativeSource={RelativeSource AncestorType=Window}}"
+                                              SelectedItem="{Binding Content}" ItemTemplate="{StaticResource EnumItem}" />
+
+                                    <StackPanel Visibility="{Binding IsTextContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Text" Style="{StaticResource Label}" />
+                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+
+                                    <StackPanel Visibility="{Binding IsSensorContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Sensor — type to filter (e.g. “tctl”, “gpu core”, “load”)" Style="{StaticResource Label}" TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding DataContext.SensorFilter, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                        <ComboBox Margin="0,6,0,0" ItemsSource="{Binding DataContext.FilteredSensors, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding DataContext.SelectedSensor, RelativeSource={RelativeSource AncestorType=Window}}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" />
+                                                        <TextBlock FontSize="10.5" Foreground="{StaticResource Muted}">
+                                                            <Run Text="{Binding Hardware, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Type, Mode=OneWay}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Decimals" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding Decimals, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+                                            <CheckBox Grid.Column="2" Content="Unit" IsChecked="{Binding ShowUnit}" VerticalAlignment="Bottom" Margin="0,0,0,6" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Visibility="{Binding IsTimeContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Format (.NET date/time pattern)" Style="{StaticResource Label}" />
+                                        <TextBox Text="{Binding Format, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Button Content="HH:mm" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="HH:mm:ss" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="h:mm tt" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="dddd d MMMM" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="ddd d MMM" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="dd/MM/yyyy" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                        </WrapPanel>
+                                    </StackPanel>
+
+                                    <Grid Visibility="{Binding UsesAffixes, Converter={StaticResource Visible}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Before" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="After" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Style" Style="{StaticResource SectionTitle}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Weight" Style="{StaticResource Label}" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Weights, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding Weight}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Align" Style="{StaticResource Label}" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Aligns, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding Align}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <DockPanel Margin="0,10,0,4">
+                                        <TextBlock Text="{Binding Size, StringFormat={}{0} px}" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" FontSize="11.5" />
+                                        <TextBlock Text="Size" Foreground="{StaticResource Muted}" FontSize="11.5" />
+                                    </DockPanel>
+                                    <Slider Minimum="16" Maximum="400" Value="{Binding Size}" IsSnapToTickEnabled="True" TickFrequency="2" />
+
+                                    <TextBlock Text="Colour" Style="{StaticResource Label}" />
+                                    <DockPanel>
+                                        <Border Width="32" Height="32" CornerRadius="8" Background="{Binding ColorBrush}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                    </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding DataContext.Swatches, RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,8,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Width="22" Height="22" Padding="0" Margin="0,0,6,6" Background="{Binding}" BorderThickness="0" ToolTip="{Binding}"
+                                                        Command="{Binding DataContext.SetColorCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <CheckBox Content="Badge (gradient pill behind the text)" IsChecked="{Binding Badge}" Margin="0,8,0,0" />
+                                    <StackPanel Visibility="{Binding Badge, Converter={StaticResource Visible}}">
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="From" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding BadgeFrom, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="To" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding BadgeTo, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding DataContext.BadgePresets, RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,8,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Width="40" Height="20" Padding="0" Margin="0,0,6,6" BorderThickness="0"
+                                                            Command="{Binding DataContext.SetBadgePresetCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
+                                                            Background="{Binding Converter={x:Static vm:BadgePresetBrush.Instance}}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="Position (pixels on the cooler)" Style="{StaticResource SectionTitle}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="X" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding X, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Y" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Y, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="Width" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Activity log -->
+                    <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,10">
+                        <DockPanel>
+                            <TextBlock Text="Activity" Style="{StaticResource Label}" Margin="0,0,0,6" DockPanel.Dock="Top" />
+                            <ListBox x:Name="Log" ItemsSource="{Binding LogLines}" Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter />
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource Muted}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

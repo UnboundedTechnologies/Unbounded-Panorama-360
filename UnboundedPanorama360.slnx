@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Unbounded.Panorama.App/Unbounded.Panorama.App.csproj" />
     <Project Path="src/Unbounded.Panorama.Core/Unbounded.Panorama.Core.csproj" />
   </Folder>
   <Folder Name="/tools/">
