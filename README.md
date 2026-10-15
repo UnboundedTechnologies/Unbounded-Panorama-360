@@ -22,7 +22,7 @@ Frames are `"TRYX"` + little-endian `uint32` length + a protobuf message (`src/U
 
 ## Install
 
-Run `UnboundedPanorama360-Setup-<version>.exe`. It installs to `Program Files\Unbounded Panorama 360` (.NET is included), asks whether to start with Windows, and installs what the app needs through winget only when it is missing: FFmpeg (video conversion), yt-dlp and Deno (YouTube import) and the PawnIO driver (CPU temperature, clocks and power). Running a newer setup closes the running app and updates it in place. Uninstall from Windows Settings, Apps.
+Download `UnboundedPanorama360-Setup-<version>.exe` from the [latest release](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest) and run it. Windows SmartScreen may warn that the publisher is unknown because the setup is not code-signed: choose More info, then Run anyway. It installs to `Program Files\Unbounded Panorama 360` (.NET is included), asks whether to start with Windows, and installs what the app needs through winget only when it is missing: FFmpeg (video conversion), yt-dlp and Deno (YouTube import) and the PawnIO driver (CPU temperature, clocks and power). Running a newer setup closes the running app and updates it in place. Uninstall from Windows Settings, Apps.
 
 The app needs administrator rights because CPU sensors are read through a kernel driver (like HWiNFO), but it never shows a UAC prompt once installed: setup registers two Task Scheduler tasks with highest privileges, one the shortcuts use to open the app and one for "Start with Windows". Only the setup itself asks for administrator rights.
 
