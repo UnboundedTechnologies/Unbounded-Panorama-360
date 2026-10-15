@@ -45,10 +45,22 @@ public partial class MainWindow : Window
         // elevated windows. Classic WM_DROPFILES still works once it is allowed through the filter.
         foreach (var message in new uint[] { WM_DROPFILES, WM_COPYDATA, WM_COPYGLOBALDATA })
             ChangeWindowMessageFilterEx(hwnd, message, MSGFLT_ALLOW, IntPtr.Zero);
-        DragAcceptFiles(hwnd, true);
         source?.AddHook(WndProc);
+        UseClassicFileDrop(hwnd);
+        // WPF registers its OLE drop target as the window is set up; take it off again once that is done.
+        Dispatcher.BeginInvoke(() => UseClassicFileDrop(hwnd), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    /// <summary>
+    /// Explorer only falls back to WM_DROPFILES when the window has no OLE drop target, and WPF
+    /// registers one on every window (verified: "OleDropTargetInterface" was set). Nothing in the
+    /// app uses WPF drag-and-drop, so the OLE target is revoked.
+    /// </summary>
+    private static void UseClassicFileDrop(IntPtr hwnd)
+    {
+        RevokeDragDrop(hwnd);
+        DragAcceptFiles(hwnd, true);
+    }
     /// <summary>A maximised chromeless window spills past the screen edge by the resize border; pull it back.</summary>
     private void FitMaximized()
     {
@@ -176,4 +188,6 @@ public partial class MainWindow : Window
 
     [DllImport("shell32.dll")]
     private static extern void DragFinish(IntPtr hDrop);
-}
+
+    [DllImport("ole32.dll")]
+    private static extern int RevokeDragDrop(IntPtr hwnd);}

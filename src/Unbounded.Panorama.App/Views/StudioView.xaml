@@ -89,8 +89,35 @@
                             <Button Content="YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
                             <Button Content="Clear" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}" />
                         </WrapPanel>
-                        <TextBlock Text="Drop an image, GIF or video file anywhere on the window, or press Ctrl+V with a copied YouTube link or file."
-                                   Foreground="{StaticResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <!-- Drop zone: says where files can go; clicking it browses like "Choose file". -->
+                        <Button Command="{Binding ChooseBackgroundCommand}" Cursor="Hand" Margin="0,8,0,0"
+                                ToolTip="Drop a file anywhere on this window, or click to browse">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Grid Background="#0A00E5FF">
+                                        <Rectangle x:Name="Dash" RadiusX="10" RadiusY="10" StrokeThickness="1.5" StrokeDashArray="5 4"
+                                                   Stroke="{StaticResource LineHover}" />
+                                        <StackPanel Margin="14,14" HorizontalAlignment="Center">
+                                            <TextBlock Text="&#xE898;" FontFamily="{StaticResource Icons}" FontSize="22"
+                                                       Foreground="{StaticResource Accent}" HorizontalAlignment="Center" />
+                                            <TextBlock Text="Drag and drop a file here" Foreground="{StaticResource Fg}" FontSize="13"
+                                                       FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                                            <TextBlock Text="Image, GIF or video, from File Explorer or your desktop. Or click to browse."
+                                                       Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,3,0,0" />
+                                            <TextBlock Foreground="{StaticResource Muted}" FontSize="11" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0">
+                                                <Run Text="YouTube: copy the link, then press" />
+                                                <Run Text="Ctrl+V" Foreground="{StaticResource Accent}" FontWeight="SemiBold" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Dash" Property="Stroke" Value="{StaticResource Accent}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                         <!-- Exact placement -->
                         <StackPanel Visibility="{Binding HasPlacement, Converter={StaticResource Visible}}">
                             <StackPanel Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
