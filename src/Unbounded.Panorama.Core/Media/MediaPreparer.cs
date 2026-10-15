@@ -146,6 +146,26 @@ public sealed class MediaPreparer
         await RunFfmpegAsync(args, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The part of a video or GIF the cooler plays (same start and length as the upload), as a
+    /// muted H.264 MP4 at the source's own shape and at most <paramref name="maxWidth"/> px wide, for
+    /// playback in the app. H.264 is used because Windows' player cannot decode every source
+    /// (verified: a VP9 .webm fails to open, its H.264 copy plays).
+    /// </summary>
+    public static async Task RenderPreviewClipAsync(string source, double startSeconds, double? durationSeconds, string mp4Path,
+        CancellationToken cancellationToken, Action<double>? onSeconds = null, int maxWidth = 960)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
+        if (startSeconds > 0)
+            args.AddRange(["-ss", Seconds(startSeconds)]);
+        if (durationSeconds is { } duration)
+            args.AddRange(["-t", Seconds(duration)]);
+        args.AddRange(["-i", source,
+            "-vf", $"scale='if(lte(sar,0),iw,max(1,round(iw*sar)))':ih,setsar=1,scale='min({maxWidth},iw)':-2,fps=30,format=yuv420p",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-an", "-movflags", "+faststart", "-f", "mp4", mp4Path]);
+        await RunFfmpegAsync(args, cancellationToken, onSeconds).ConfigureAwait(false);
+    }
+
     /// <summary>Small upright thumbnail of any media file (library cards).</summary>
     public static async Task RenderThumbnailAsync(string source, double atSeconds, string jpgPath, CancellationToken cancellationToken)
     {

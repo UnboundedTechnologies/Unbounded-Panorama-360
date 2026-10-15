@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -55,7 +56,10 @@ public sealed partial class MainViewModel : ObservableObject
     public IReadOnlyList<Layout.TextAlign> Aligns { get; } = Enum.GetValues<Layout.TextAlign>();
     public IReadOnlyList<BackgroundFit> Fits { get; } = Enum.GetValues<BackgroundFit>();
     public IReadOnlyList<string> SensorTypeChoices => SensorTypes;
-    public IReadOnlyList<string> Swatches { get; } = ["#FFFFFF", "#BFC7D5", "#7C8799", "#FF5A5F", "#FF7A59", "#FFC247", "#76B900", "#3DDC97", "#22D3EE", "#4F8CFF", "#A78BFA", "#F472B6"];
+    public IReadOnlyList<string> Swatches { get; } = ["#FFFFFF", "#000000", "#BFC7D5", "#7C8799", "#FF5A5F", "#FF7A59", "#FFC247", "#76B900", "#3DDC97", "#22D3EE", "#4F8CFF", "#A78BFA", "#F472B6"];
+
+    /// <summary>The few one-click colours on the Draw toolbar; every other colour is in its picker.</summary>
+    public IReadOnlyList<string> DrawSwatches { get; } = ["#FFFFFF", "#000000", "#FF5A5F", "#FFC247", "#00E5FF", "#A78BFA"];
     public IReadOnlyList<(string From, string To)> BadgePresets { get; } = [("#A92F2C", "#CB6236"), ("#629A00", "#79AB51"), ("#0068B5", "#566D98"), ("#4A4A4A", "#707070"), ("#7C3AED", "#DB2777"), ("#0EA5E9", "#22D3EE")];
 
     [ObservableProperty] public partial WidgetViewModel? SelectedWidget { get; set; }
@@ -115,6 +119,22 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial ScreenArea Area { get; set; } = ScreenArea.Whole;
     [ObservableProperty] public partial ImageSource? SourceFrame { get; set; }
     private string _sourceFrameKey = "";
+
+    /// <summary>The clip the cooler plays, as a light H.264 copy the editor loops (null for images).</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasClip))] public partial Uri? SourceClip { get; set; }
+
+    public bool HasClip => SourceClip is not null;
+
+    /// <summary>"Preparing the video preview… 40 %" while the copy is made; empty otherwise.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HasClipStatus))] public partial string ClipStatus { get; set; } = "";
+
+    public bool HasClipStatus => ClipStatus.Length > 0;
+
+    /// <summary>Play / pause of the video in the editor.</summary>
+    [ObservableProperty] public partial bool PreviewPlaying { get; set; } = true;
+
+    private string _clipKey = "";
+    private CancellationTokenSource? _clipCts;
 
     public bool HasPlacement => HasBackground && BackgroundDeviceFile is null && MediaX is not null && MediaY is not null && MediaWidth is > 0 && SourceWidth > 0 && SourceHeight > 0;
     public double MediaHeight => SourceWidth > 0 ? (MediaWidth ?? 0) * SourceHeight / SourceWidth : 0;
@@ -467,6 +487,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             SourceFrame = null;
             _sourceFrameKey = "";
+            StopPreviewClip();
             return;
         }
         try
@@ -527,7 +548,87 @@ public sealed partial class MainViewModel : ObservableObject
         {
             Status = "Could not read the background: " + ex.Message;
         }
+        if (path == BackgroundPath)
+            await EnsurePreviewClipAsync(path);
     }
+
+    private void StopPreviewClip()
+    {
+        _clipCts?.Cancel();
+        _clipKey = "";
+        SourceClip = null;
+        ClipStatus = "";
+    }
+
+    /// <summary>
+    /// Makes the editor play the background as the cooler will: the same start and length, looped.
+    /// The still frame stays visible while the copy is made; copies are cached by source, start and
+    /// length, and only the current one is kept.
+    /// </summary>
+    private async Task EnsurePreviewClipAsync(string path)
+    {
+        if (MediaPreparer.IsImage(path))
+        {
+            StopPreviewClip();
+            return;
+        }
+        var start = StartSeconds;
+        var duration = DurationSeconds;
+        var key = $"{path}|{File.GetLastWriteTimeUtc(path).Ticks}|{start.ToString(CultureInfo.InvariantCulture)}|{duration?.ToString(CultureInfo.InvariantCulture)}";
+        if (key == _clipKey)
+            return;
+        _clipCts?.Cancel();
+        _clipKey = key;
+        var cts = _clipCts = new CancellationTokenSource();
+        var name = "clip-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)), 0, 8) + ".mp4";
+        var file = Path.Combine(_storage.PreviewDir, name);
+        var part = file + ".part";
+        try
+        {
+            if (!File.Exists(file))
+            {
+                SourceClip = null;
+                // Start and length are often typed digit by digit; wait for the value to settle.
+                await Task.Delay(600, cts.Token);
+                ClipStatus = "Preparing the video preview…";
+                var expected = duration ?? Math.Max(0, await Task.Run(() => MediaPreparer.ProbeDurationAsync(path, cts.Token)) - start);
+                await Task.Run(() => MediaPreparer.RenderPreviewClipAsync(path, start, duration, part, cts.Token, seconds =>
+                    _ui.BeginInvoke(() =>
+                    {
+                        if (!cts.IsCancellationRequested && expected > 0)
+                            ClipStatus = $"Preparing the video preview… {Math.Clamp(seconds / expected, 0, 1):P0}";
+                    })));
+                File.Move(part, file, overwrite: true);
+            }
+            if (cts.IsCancellationRequested)
+                return;
+            ClipStatus = "";
+            SourceClip = new Uri(file);
+            // Keep only the current copy (the previous one may still be open in the player; it goes next time).
+            foreach (var old in Directory.EnumerateFiles(_storage.PreviewDir, "clip-*"))
+            {
+                if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase))
+                    try { File.Delete(old); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            try { File.Delete(part); } catch { }
+        }
+        catch (Exception ex)
+        {
+            try { File.Delete(part); } catch { }
+            if (!cts.IsCancellationRequested)
+            {
+                ClipStatus = "";
+                _clipKey = "";
+                AddLog("Video preview unavailable (the still frame is shown): " + ex.Message);
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void TogglePreviewPlaying() => PreviewPlaying = !PreviewPlaying;
 
     private string BackgroundKey() => $"{BackgroundDeviceFile}|{BackgroundPath}|{BackgroundFit}|{CropX}|{CropY}|{StartSeconds}|{Orientation}";
 
@@ -1351,6 +1452,7 @@ public sealed partial class MainViewModel : ObservableObject
         BackgroundFit = BackgroundFit.Fill;
         SourceFrame = null;
         _sourceFrameKey = "";
+        StopPreviewClip();
     }
 
     [RelayCommand]
@@ -1401,6 +1503,38 @@ public sealed partial class MainViewModel : ObservableObject
             {
                 // A file that cannot be decoded just keeps the placeholder.
             }
+        }
+
+        // Then the moving previews of videos and GIFs (stills first, so the page fills quickly).
+        foreach (var item in items.Where(i => i.IsVideo && i.Exists))
+        {
+            if (token.IsCancellationRequested)
+                return;
+            try
+            {
+                var entry = item.Entry;
+                var seconds = await Task.Run(() => MediaLibrary.PlayedSecondsAsync(entry, token), token);
+                if (seconds > 0)
+                    item.DurationText = TimeSpan.FromSeconds(Math.Round(seconds)).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture);
+                var mp4 = await Task.Run(() => _library.PreviewClipAsync(entry, token), token);
+                if (mp4 is not null)
+                    item.Clip = new Uri(mp4);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                // No moving preview for this one; its still stays.
+            }
+        }
+        try
+        {
+            _library.PruneCache();
+        }
+        catch (IOException)
+        {
         }
     }
 

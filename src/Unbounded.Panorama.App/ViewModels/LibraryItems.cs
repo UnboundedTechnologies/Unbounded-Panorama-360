@@ -20,6 +20,15 @@ public sealed partial class LibraryItemViewModel(LibraryEntry entry) : Observabl
 
     [ObservableProperty] public partial ImageSource? Thumbnail { get; set; }
     [ObservableProperty] public partial bool IsCurrent { get; set; }
+
+    /// <summary>Videos and GIFs move on their card; pictures stay still.</summary>
+    public bool IsVideo => !Media.MediaPreparer.IsImage(Entry.Path);
+
+    /// <summary>The card's looping preview, once made.</summary>
+    [ObservableProperty] public partial Uri? Clip { get; set; }
+
+    /// <summary>Played length, e.g. "0:24" ("VIDEO" until known).</summary>
+    [ObservableProperty] public partial string DurationText { get; set; } = "VIDEO";
 }
 
 /// <summary>A card in "On the cooler".</summary>

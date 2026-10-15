@@ -7,8 +7,9 @@ using System.Windows.Media;
 namespace Unbounded.Panorama.App.Controls;
 
 /// <summary>
-/// Swatch + hex box; the swatch opens a picker with a saturation/brightness square, a hue bar,
-/// and exact R/G/B and hex fields. Bound through <see cref="Hex"/> ("#RRGGBB", two-way).
+/// Swatch + hex box; the swatch opens a picker with quick and recent colours, a
+/// saturation/brightness square, a hue bar, and exact R/G/B and hex fields. Bound through
+/// <see cref="Hex"/> ("#RRGGBB", two-way).
 /// </summary>
 public partial class ColorPicker : UserControl
 {
@@ -40,13 +41,84 @@ public partial class ColorPicker : UserControl
     private bool _dragHue;
     private bool _updating;
 
+    public static readonly DependencyProperty CompactProperty = DependencyProperty.Register(
+        nameof(Compact), typeof(bool), typeof(ColorPicker), new PropertyMetadata(false, (d, e) => ((ColorPicker)d).ApplyCompact()));
+
+    /// <summary>Swatch only, no hex box (toolbars). The popup is the same.</summary>
+    public bool Compact
+    {
+        get => (bool)GetValue(CompactProperty);
+        set => SetValue(CompactProperty, value);
+    }
+
+    /// <summary>One-click colours in every picker; black is a real colour on the cooler's AMOLED.</summary>
+    public static readonly IReadOnlyList<string> QuickColours =
+    [
+        "#FFFFFF", "#000000", "#BFC7D5", "#7C8799", "#3A4256",
+        "#FF5A5F", "#FF7A59", "#FFC247", "#76B900", "#3DDC97",
+        "#00E5FF", "#22D3EE", "#4F8CFF", "#8B5CF6", "#A78BFA", "#F472B6",
+    ];
+
+    /// <summary>Colours chosen recently in any picker (newest first), shared for this session.</summary>
+    private static readonly System.Collections.ObjectModel.ObservableCollection<string> Recent = [];
+    private const int RecentMax = 10;
+
+    private string? _hexWhenOpened;
+
     public ColorPicker()
     {
         InitializeComponent();
-        Pop.Opened += (_, _) => Dispatcher.BeginInvoke(PositionMarkers, System.Windows.Threading.DispatcherPriority.Loaded);
+        QuickList.ItemsSource = QuickColours;
+        RecentList.ItemsSource = Recent;
+        UpdateRecentVisibility();
+        Recent.CollectionChanged += (_, _) => UpdateRecentVisibility();
+        Pop.Opened += (_, _) =>
+        {
+            _hexWhenOpened = Hex;
+            Dispatcher.BeginInvoke(PositionMarkers, System.Windows.Threading.DispatcherPriority.Loaded);
+        };
+        // Remember the colour once the popup closes (not every step of a drag).
+        Pop.Closed += (_, _) =>
+        {
+            if (!string.Equals(Hex, _hexWhenOpened, StringComparison.OrdinalIgnoreCase))
+                Remember(Hex);
+        };
         SvArea.SizeChanged += (_, _) => PositionMarkers();
         HueArea.SizeChanged += (_, _) => PositionMarkers();
         OnHexChanged(Hex);
+    }
+
+    private void ApplyCompact()
+    {
+        HexBox.Visibility = Compact ? Visibility.Collapsed : Visibility.Visible;
+        Opener.Margin = Compact ? new Thickness(0) : new Thickness(0, 0, 8, 0);
+    }
+
+    private void UpdateRecentVisibility() =>
+        RecentPanel.Visibility = Recent.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    private static void Remember(string? hex)
+    {
+        if (!TryParse(hex, out var c))
+            return;
+        var normal = ToHex(c);
+        var existing = Recent.IndexOf(normal);
+        if (existing == 0)
+            return;
+        if (existing > 0)
+            Recent.RemoveAt(existing);
+        Recent.Insert(0, normal);
+        while (Recent.Count > RecentMax)
+            Recent.RemoveAt(Recent.Count - 1);
+    }
+
+    private void OnDotClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string hex } && TryParse(hex, out var c))
+        {
+            (_h, _s, _v) = ToHsv(c, _h);
+            Commit(c);
+        }
     }
 
     // ------------------------------------------------------------------ external value

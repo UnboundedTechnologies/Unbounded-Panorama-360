@@ -2,6 +2,29 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Name="Root">
+    <UserControl.Resources>
+        <DataTemplate x:Key="ColourDot">
+            <Button Width="24" Height="24" Margin="0,0,6,6" Cursor="Hand" Tag="{Binding}" Click="OnDotClick" ToolTip="{Binding}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="e" Stroke="#40FFFFFF" StrokeThickness="1">
+                                <Ellipse.Fill>
+                                    <SolidColorBrush Color="{Binding}" />
+                                </Ellipse.Fill>
+                            </Ellipse>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="e" Property="Stroke" Value="{StaticResource Accent}" />
+                                <Setter TargetName="e" Property="StrokeThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
     <Grid>
         <DockPanel>
             <!-- Swatch: opens the picker -->
@@ -33,6 +56,26 @@
                AllowsTransparency="True" PopupAnimation="Fade" IsOpen="{Binding IsChecked, ElementName=Opener, Mode=TwoWay}">
             <Border Background="#F20D1424" BorderBrush="{StaticResource LineHover}" BorderThickness="1" CornerRadius="14" Padding="14" Width="316">
                 <StackPanel>
+                    <!-- One-click colours (black included), then the ones used recently in any picker -->
+                    <TextBlock Text="QUICK COLOURS" Style="{StaticResource Label}" Margin="0,0,0,6" />
+                    <ItemsControl x:Name="QuickList" ItemTemplate="{DynamicResource ColourDot}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <StackPanel x:Name="RecentPanel" Margin="0,8,0,0">
+                        <TextBlock Text="RECENT" Style="{StaticResource Label}" Margin="0,0,0,6" />
+                        <ItemsControl x:Name="RecentList" ItemTemplate="{DynamicResource ColourDot}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                    <Border Height="1" Background="{StaticResource Line}" Margin="0,12,0,12" />
                     <!-- Saturation (x) / brightness (y) -->
                     <Grid x:Name="SvArea" Height="170" Cursor="Cross" ClipToBounds="True"
                           MouseLeftButtonDown="OnSvDown" MouseMove="OnSvMove" MouseLeftButtonUp="OnSvUp">

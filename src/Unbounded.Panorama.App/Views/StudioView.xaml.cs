@@ -79,7 +79,11 @@ public partial class StudioView : UserControl
         {
             _window.PreviewKeyDown += OnKey;
             _window.PreviewMouseWheel += OnWheel;
+            _window.IsVisibleChanged += OnWindowVisibleChanged;
+            _window.StateChanged += OnWindowStateChanged;
         }
+        _clipSource = null;
+        UpdateClip();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -93,7 +97,58 @@ public partial class StudioView : UserControl
         {
             _window.PreviewKeyDown -= OnKey;
             _window.PreviewMouseWheel -= OnWheel;
+            _window.IsVisibleChanged -= OnWindowVisibleChanged;
+            _window.StateChanged -= OnWindowStateChanged;
         }
+        ClipPlayer.Close();
+        _clipSource = null;
+    }
+
+    // ================================================================== video preview
+
+    private Uri? _clipSource;
+
+    /// <summary>Loads, plays, pauses or closes the looping preview clip to match the view model.</summary>
+    private void UpdateClip()
+    {
+        if (_vm is null)
+            return;
+        var clip = Vm.SourceClip;
+        if (clip != _clipSource)
+        {
+            _clipSource = clip;
+            ClipPlayer.Close();
+            ClipPlayer.Source = clip;
+            ClipPlayer.Visibility = Visibility.Hidden; // shown once the first frame is ready (no black flash)
+        }
+        if (clip is null)
+            return;
+        // No decoding while the window is hidden in the tray or minimised.
+        var shown = _window is { IsVisible: true } w && w.WindowState != WindowState.Minimized;
+        if (Vm.PreviewPlaying && shown)
+            ClipPlayer.Play();
+        else
+            ClipPlayer.Pause();
+    }
+
+    private void OnWindowVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdateClip();
+
+    private void OnWindowStateChanged(object? sender, EventArgs e) => UpdateClip();
+
+    private void OnClipOpened(object sender, RoutedEventArgs e) => ClipPlayer.Visibility = Visibility.Visible;
+
+    private void OnClipEnded(object sender, RoutedEventArgs e)
+    {
+        // Loop like the cooler does.
+        ClipPlayer.Position = TimeSpan.Zero;
+        UpdateClip();
+    }
+
+    private void OnClipFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        // The still frame underneath stays; say why the video does not move.
+        ClipPlayer.Visibility = Visibility.Hidden;
+        Vm.Status = "The video preview could not play: " + e.ErrorException.Message;
     }
 
     private static Brush Frozen(Brush b)
@@ -152,6 +207,10 @@ public partial class StudioView : UserControl
             case nameof(MainViewModel.DrawSize):
             case nameof(MainViewModel.EditorMode):
                 ApplyInkSettings();
+                break;
+            case nameof(MainViewModel.SourceClip):
+            case nameof(MainViewModel.PreviewPlaying):
+                UpdateClip();
                 break;
         }
         if (e.PropertyName == nameof(MainViewModel.EditorMode))

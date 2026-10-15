@@ -293,7 +293,8 @@
 
             <!-- Toolbar -->
             <Border Background="{StaticResource Glass2}" BorderBrush="{StaticResource EdgeGradient}" BorderThickness="1" CornerRadius="14" Padding="6,5" HorizontalAlignment="Center">
-                <StackPanel Orientation="Horizontal">
+                <!-- Wraps onto a second row in a narrow window instead of cutting tools off -->
+                <WrapPanel Orientation="Horizontal">
                     <Border Background="{StaticResource Field}" CornerRadius="10">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Select" x:Name="SelectMode" ToolTip="Move and edit widgets">SELECT</RadioButton>
@@ -388,7 +389,10 @@
                             <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE75C;" />
                         </RadioButton>
                         <Border Style="{StaticResource Sep}" />
-                        <ItemsControl ItemsSource="{Binding Swatches}" VerticalAlignment="Center">
+                        <!-- Current colour (opens the full picker), then one-click colours -->
+                        <controls:ColorPicker Compact="True" Margin="4,0,6,0" VerticalAlignment="Center" Hex="{Binding DrawColor, Mode=TwoWay}"
+                                              ToolTip="Drawing colour: click for the full picker" />
+                        <ItemsControl ItemsSource="{Binding DrawSwatches}" VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Orientation="Horizontal" />
@@ -396,19 +400,23 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Width="18" Height="18" Margin="2,0" Padding="0" Background="{Binding}" BorderThickness="0" ToolTip="{Binding}"
+                                    <Button Width="20" Height="20" Margin="2,0" Padding="0" Background="{Binding}" BorderThickness="0" ToolTip="{Binding}" Cursor="Hand"
                                             Command="{Binding DataContext.SetDrawColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
                                         <Button.Template>
                                             <ControlTemplate TargetType="Button">
-                                                <Ellipse Fill="{TemplateBinding Background}" Stroke="#33FFFFFF" StrokeThickness="1" />
+                                                <Ellipse x:Name="e" Fill="{TemplateBinding Background}" Stroke="#40FFFFFF" StrokeThickness="1" />
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="e" Property="Stroke" Value="{StaticResource Accent}" />
+                                                        <Setter TargetName="e" Property="StrokeThickness" Value="2" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
                                             </ControlTemplate>
                                         </Button.Template>
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <controls:ColorPicker Width="124" Margin="6,0,0,0" VerticalAlignment="Center" Hex="{Binding DrawColor, Mode=TwoWay}"
-                                              ToolTip="Drawing colour: click the swatch for the picker" />
                         <Border Style="{StaticResource Sep}" />
                         <Slider Width="110" Minimum="2" Maximum="80" Value="{Binding DrawSize}" VerticalAlignment="Center" ToolTip="Thickness" />
                         <TextBlock Text="{Binding DrawSize, StringFormat={}{0:0} px}" Width="44" Margin="6,0,0,0" VerticalAlignment="Center"
@@ -418,6 +426,16 @@
                         </Button>
                     </StackPanel>
 
+                    <!-- Play / pause the background video in the editor -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding HasClip, Converter={StaticResource Visible}}">
+                        <Border Style="{StaticResource Sep}" />
+                        <Button Style="{StaticResource Tool}" Command="{Binding TogglePreviewPlayingCommand}" ToolTip="Play or pause the video preview">
+                            <Grid>
+                                <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE769;" Visibility="{Binding PreviewPlaying, Converter={StaticResource Visible}}" />
+                                <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE768;" Foreground="{StaticResource Accent}" Visibility="{Binding PreviewPlaying, Converter={StaticResource Hidden}}" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
                     <Border Style="{StaticResource Sep}" />
                     <Button Style="{StaticResource Tool}" Command="{Binding UndoCommand}" IsEnabled="{Binding CanUndo}" ToolTip="Undo (Ctrl+Z)">
                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE7A7;" />
@@ -425,7 +443,7 @@
                     <Button Style="{StaticResource Tool}" Command="{Binding RedoCommand}" IsEnabled="{Binding CanRedo}" ToolTip="Redo (Ctrl+Y)">
                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE7A6;" />
                     </Button>
-                </StackPanel>
+                </WrapPanel>
             </Border>
 
             <!-- The cooler -->
@@ -454,6 +472,12 @@
                                     <Image Source="{Binding SourceFrame}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"
                                            Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
                                            Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}" />
+                                    <!-- The clip the cooler plays, looped over the still (source set in code: StudioView.UpdateClip) -->
+                                    <MediaElement x:Name="ClipPlayer" Stretch="Fill" LoadedBehavior="Manual" UnloadedBehavior="Close" IsMuted="True"
+                                                  MediaOpened="OnClipOpened" MediaEnded="OnClipEnded" MediaFailed="OnClipFailed"
+                                                  RenderOptions.BitmapScalingMode="HighQuality"
+                                                  Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
+                                                  Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}" />
                                 </Canvas>
 
                                 <Grid IsHitTestVisible="False" Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
@@ -462,6 +486,12 @@
                                         <TextBlock Text="SCREEN BENDS HERE" Foreground="#9900E5FF" FontSize="28" FontFamily="{StaticResource Display}" FontWeight="SemiBold" Margin="18,1058,0,0" />
                                     </Grid>
                                 </Grid>
+
+                                <Border Visibility="{Binding HasClipStatus, Converter={StaticResource Visible}}" IsHitTestVisible="False"
+                                        HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,60,0,0" Padding="28,12" CornerRadius="30"
+                                        Background="#D90B111E" BorderBrush="{StaticResource LineHover}" BorderThickness="2">
+                                    <TextBlock Text="{Binding ClipStatus}" FontSize="30" Foreground="{StaticResource Accent}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" />
+                                </Border>
 
                                 <!-- Free drawing (baked into the background on Apply) -->
                                 <InkCanvas x:Name="Ink" Background="Transparent" IsHitTestVisible="{Binding IsDrawMode}"
