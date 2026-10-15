@@ -201,10 +201,13 @@ public partial class YouTubeWindow : Window
         SetBusy(true, "Downloading…");
         RangePanel.IsEnabled = false;
         ImportButton.IsEnabled = false;
+        // Read the sliders here, on the UI thread; the download runs on a worker thread.
+        var start = Start;
+        var length = Length;
         try
         {
             var progress = new Progress<string>(s => StatusText.Text = s);
-            Result = await Task.Run(() => _importer.DownloadAsync(video, Start, Length, progress, cts.Token), cts.Token);
+            Result = await Task.Run(() => _importer.DownloadAsync(video, start, length, progress, cts.Token), cts.Token);
             DialogResult = true;
         }
         catch (OperationCanceledException)

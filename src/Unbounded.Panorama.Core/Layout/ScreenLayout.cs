@@ -99,6 +99,16 @@ public sealed class BackgroundMedia
 
     /// <summary>Length to keep, seconds; null keeps the rest of the source (60 s for still images).</summary>
     public double? DurationSeconds { get; set; }
+
+    /// <summary>
+    /// Play a file already stored on the cooler (e.g. a TRYX preset) instead of uploading
+    /// <see cref="SourcePath"/>. Device files cannot carry a drawing.
+    /// </summary>
+    public string? DeviceFile { get; set; }
+
+    /// <summary>Transparent PNG (canvas size) drawn over the background. Set at apply time, not saved.</summary>
+    [JsonIgnore]
+    public string? OverlayPath { get; set; }
 }
 
 public sealed class ScreenLayout
@@ -111,6 +121,9 @@ public sealed class ScreenLayout
     public bool Fahrenheit { get; set; }
     public BackgroundMedia Background { get; set; } = new();
     public List<Widget> Widgets { get; set; } = [];
+
+    /// <summary>Free drawing (Windows ink, ISF, base64) in canvas coordinates; baked into the background.</summary>
+    public string? Drawing { get; set; }
 
     [JsonIgnore]
     public int CanvasWidth => Orientation == Orientation.Portrait ? PanelHeight : PanelWidth;

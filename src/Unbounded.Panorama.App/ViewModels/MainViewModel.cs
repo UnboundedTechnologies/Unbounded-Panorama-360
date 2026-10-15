@@ -19,6 +19,8 @@ namespace Unbounded.Panorama.App.ViewModels;
 
 public enum AlignMode { Left, CenterH, Right, Top, Middle, Bottom }
 
+public enum DrawTool { Pen, Line, Rectangle, Ellipse, Eraser }
+
 public sealed partial class MainViewModel : ObservableObject
 {
     public static readonly string[] MediaExtensions = [".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif", ".mp4", ".mkv", ".webm", ".mov", ".avi"];
@@ -30,6 +32,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly WidgetText _text;
     private readonly AppStorage _storage;
     private readonly PresetStore _presets;
+    private readonly MediaLibrary _library;
     private readonly UndoHistory _history = new();
     private readonly Dispatcher _ui;
     private readonly DispatcherTimer _tick;
@@ -84,6 +87,34 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial PresetItem? SelectedPreset { get; set; }
     [ObservableProperty] public partial string PresetName { get; set; } = "";
 
+    // Shell
+    [ObservableProperty] public partial string CurrentPage { get; set; } = "Studio";
+    [ObservableProperty] public partial string CpuTempText { get; set; } = "--";
+    [ObservableProperty] public partial string GpuTempText { get; set; } = "--";
+    public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
+
+    // Library
+    public ObservableCollection<LibraryItemViewModel> LibraryItems { get; } = [];
+    public ObservableCollection<DeviceMediaViewModel> DeviceItems { get; } = [];
+    [ObservableProperty] public partial string LibraryTab { get; set; } = "Mine";
+    [ObservableProperty] public partial bool DeviceListBusy { get; set; }
+    [ObservableProperty] public partial string DeviceListNote { get; set; } = "";
+
+    // Background from the cooler's own storage
+    [ObservableProperty] public partial string? BackgroundDeviceFile { get; set; }
+
+    // Drawing
+    [ObservableProperty] public partial string? Drawing { get; set; }
+    [ObservableProperty] public partial string EditorMode { get; set; } = "Select";
+    [ObservableProperty] public partial DrawTool DrawTool { get; set; } = DrawTool.Pen;
+    [ObservableProperty] public partial string DrawColor { get; set; } = "#00E5FF";
+    [ObservableProperty] public partial double DrawSize { get; set; } = 12;
+    public bool IsDrawMode => EditorMode == "Draw";
+    public bool HasDrawing => !string.IsNullOrEmpty(Drawing);
+
+    /// <summary>Raised when the drawing is replaced from outside the ink canvas (load, undo, clear).</summary>
+    public event Action<string?>? DrawingReplaced;
+
     public int CanvasWidth => Orientation == LayoutOrientation.Portrait ? ScreenLayout.PanelHeight : ScreenLayout.PanelWidth;
     public int CanvasHeight => Orientation == LayoutOrientation.Portrait ? ScreenLayout.PanelWidth : ScreenLayout.PanelHeight;
     public bool IsPortrait
@@ -100,7 +131,9 @@ public sealed partial class MainViewModel : ObservableObject
     public bool IsKanaliBlocking => EngineState == EngineState.BlockedByKanali;
     public bool HasBackground => !string.IsNullOrEmpty(BackgroundPath);
     public bool IsVideoBackground => HasBackground && !MediaPreparer.IsImage(BackgroundPath!);
-    public string BackgroundName => HasBackground ? Path.GetFileName(BackgroundPath!) : "No background — black screen";
+    public string BackgroundName => BackgroundDeviceFile is { } f
+        ? $"From the cooler: {f}"
+        : HasBackground ? Path.GetFileName(BackgroundPath!) : "No background — black screen";
     public int VisibleCount => Widgets.Count(w => !w.Hidden);
     public string WidgetCount => $"{VisibleCount} / {LayoutCompiler.MaxWidgets} shown";
     public IEnumerable<WidgetViewModel> Selection => Widgets.Where(w => w.IsSelected);
@@ -117,6 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
         _preparer = preparer;
         _storage = storage;
         _presets = new PresetStore(storage.RoamingDir);
+        _library = new MediaLibrary(storage.RoamingDir, storage.LocalDir);
         _text = new WidgetText(sensors);
         _ui = Dispatcher.CurrentDispatcher;
 
@@ -136,6 +170,7 @@ public sealed partial class MainViewModel : ObservableObject
         _history.Record(BuildLayout().ToJson());
         _tick.Start();
         RebuildSensorRows();
+        ReloadLibrary();
     }
 
     // ================================================================== layout state
@@ -153,8 +188,10 @@ public sealed partial class MainViewModel : ObservableObject
             CropY = CropY,
             StartSeconds = StartSeconds,
             DurationSeconds = DurationSeconds,
+            DeviceFile = BackgroundDeviceFile,
         },
         Widgets = Widgets.Select(w => w.ToModel()).ToList(),
+        Drawing = Drawing,
     };
 
     private void Load(ScreenLayout layout, bool keepSelection)
@@ -172,6 +209,12 @@ public sealed partial class MainViewModel : ObservableObject
             CropY = layout.Background.CropY;
             StartSeconds = layout.Background.StartSeconds;
             DurationSeconds = layout.Background.DurationSeconds;
+            BackgroundDeviceFile = layout.Background.DeviceFile;
+            if (Drawing != layout.Drawing)
+            {
+                Drawing = layout.Drawing;
+                DrawingReplaced?.Invoke(Drawing);
+            }
             Widgets.Clear();
             foreach (var w in layout.Widgets)
             {
@@ -198,7 +241,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    private string BackgroundKey() => $"{BackgroundPath}|{BackgroundFit}|{CropX}|{CropY}|{StartSeconds}|{Orientation}";
+    private string BackgroundKey() => $"{BackgroundDeviceFile}|{BackgroundPath}|{BackgroundFit}|{CropX}|{CropY}|{StartSeconds}|{Orientation}";
 
     private void Attach(WidgetViewModel vm)
     {
@@ -314,6 +357,29 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(IsVideoBackground));
         OnPropertyChanged(nameof(BackgroundName));
         BackgroundEdited();
+    }
+
+    partial void OnBackgroundDeviceFileChanged(string? value)
+    {
+        OnPropertyChanged(nameof(BackgroundName));
+        BackgroundEdited();
+    }
+
+    partial void OnDrawingChanged(string? value) => OnPropertyChanged(nameof(HasDrawing));
+
+    partial void OnEditorModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsDrawMode));
+        if (value == "Draw")
+            ClearSelection();
+    }
+
+    [RelayCommand]
+    private void Navigate(string page)
+    {
+        CurrentPage = page;
+        if (page == "Library" && IsConnected && DeviceItems.Count == 0)
+            _ = RefreshDeviceAsync();
     }
 
     partial void OnBackgroundFitChanged(BackgroundFit value) => BackgroundEdited();
@@ -476,6 +542,8 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var w in Widgets)
             w.PreviewText = _text.Resolve(w.ToModel(), fahrenheit);
         UpdateSensorValues();
+        CpuTempText = _sensors.Format(SensorHub.RolePrefix + "cpu-temp", 0, true, fahrenheit);
+        GpuTempText = _sensors.Format(SensorHub.RolePrefix + "gpu-temp", 0, true, fahrenheit);
         // The sensor list can grow after start-up (hardware discovered late); refresh it now and then.
         if (--_sensorRefreshCountdown <= 0)
         {
@@ -493,6 +561,13 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task RenderBackgroundPreviewAsync()
     {
         _previewCts?.Cancel();
+        if (BackgroundDeviceFile is { } deviceFile)
+        {
+            // Our own uploads have a cached still; device presets have none.
+            var still = DeviceThumbnailPath(deviceFile);
+            BackgroundPreview = still is null ? null : LoadImage(still);
+            return;
+        }
         if (!HasBackground)
         {
             BackgroundPreview = null;
@@ -526,6 +601,34 @@ public sealed partial class MainViewModel : ObservableObject
         {
             try { File.Delete(png); } catch { }
         }
+    }
+
+    private static BitmapImage? LoadImage(string path)
+    {
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.UriSource = new Uri(path);
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Still of an earlier upload: "upn360-&lt;key&gt;.…" maps to the media cache "&lt;key&gt;.png".</summary>
+    private string? DeviceThumbnailPath(string deviceName)
+    {
+        if (!deviceName.StartsWith(DisplayEngine.RemotePrefix, StringComparison.Ordinal))
+            return null;
+        var key = deviceName[DisplayEngine.RemotePrefix.Length..].Split('.')[0];
+        var png = Path.Combine(_storage.MediaCacheDir, key + ".png");
+        return File.Exists(png) ? png : null;
     }
 
     private void AddLog(string line)
@@ -883,6 +986,7 @@ public sealed partial class MainViewModel : ObservableObject
         _loading = true;
         try
         {
+            BackgroundDeviceFile = null;
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = 0;
@@ -893,6 +997,8 @@ public sealed partial class MainViewModel : ObservableObject
             _loading = false;
         }
         BackgroundPath = path;
+        _library.Remember(LibraryKind.File, path, null);
+        ReloadLibrary();
         Status = $"Background set to {Path.GetFileName(path)}. Apply to send it to the cooler.";
     }
 
@@ -904,6 +1010,7 @@ public sealed partial class MainViewModel : ObservableObject
         _loading = true;
         try
         {
+            BackgroundDeviceFile = null;
             BackgroundFit = BackgroundFit.Fill;
             CropX = 0.5;
             CropY = 0.5;
@@ -915,11 +1022,217 @@ public sealed partial class MainViewModel : ObservableObject
             _loading = false;
         }
         BackgroundPath = clip.FilePath;
-        Status = $"Imported “{title}”. Drag the crop sliders to frame it, then Apply.";
+        _library.Remember(LibraryKind.YouTube, clip.FilePath, title, StartSeconds, DurationSeconds);
+        ReloadLibrary();
+        Status = $"Imported “{title}”. Drag the framing sliders to choose the part that fills the screen, then Apply.";
     }
 
     [RelayCommand]
-    private void ClearBackground() => BackgroundPath = null;
+    private void ClearBackground()
+    {
+        BackgroundDeviceFile = null;
+        BackgroundPath = null;
+    }
+
+    // ================================================================== library
+
+    private CancellationTokenSource? _thumbCts;
+
+    private void ReloadLibrary()
+    {
+        _thumbCts?.Cancel();
+        var cts = _thumbCts = new CancellationTokenSource();
+        LibraryItems.Clear();
+        foreach (var e in _library.Entries)
+        {
+            var item = new LibraryItemViewModel(e)
+            {
+                IsCurrent = BackgroundDeviceFile is null && string.Equals(e.Path, BackgroundPath, StringComparison.OrdinalIgnoreCase),
+            };
+            LibraryItems.Add(item);
+        }
+        _ = LoadLibraryThumbnailsAsync(LibraryItems.ToList(), cts.Token);
+    }
+
+    private async Task LoadLibraryThumbnailsAsync(List<LibraryItemViewModel> items, CancellationToken token)
+    {
+        foreach (var item in items)
+        {
+            if (token.IsCancellationRequested)
+                return;
+            try
+            {
+                var entry = item.Entry;
+                var jpg = await Task.Run(() => _library.ThumbnailAsync(entry, token), token);
+                if (jpg is not null)
+                    item.Thumbnail = LoadImage(jpg);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                // A file that cannot be decoded just keeps the placeholder.
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void UseLibraryItem(LibraryItemViewModel item)
+    {
+        var e = item.Entry;
+        if (!File.Exists(e.Path))
+        {
+            Status = "That file is no longer on this PC.";
+            return;
+        }
+        _loading = true;
+        try
+        {
+            BackgroundDeviceFile = null;
+            BackgroundFit = BackgroundFit.Fill;
+            CropX = 0.5;
+            CropY = 0.5;
+            StartSeconds = e.StartSeconds;
+            DurationSeconds = e.LengthSeconds;
+        }
+        finally
+        {
+            _loading = false;
+        }
+        BackgroundPath = e.Path;
+        _library.Remember(e.Kind, e.Path, e.Title, e.StartSeconds, e.LengthSeconds);
+        ReloadLibrary();
+        CurrentPage = "Studio";
+        Status = $"Background: {e.Title}. Apply to send it to the cooler.";
+    }
+
+    [RelayCommand]
+    private void ForgetLibraryItem(LibraryItemViewModel item)
+    {
+        _library.Forget(item.Entry, _storage.DownloadDir);
+        ReloadLibrary();
+        Status = $"Removed “{item.Title}” from the library.";
+    }
+
+    [RelayCommand]
+    private void RevealLibraryItem(LibraryItemViewModel item)
+    {
+        if (File.Exists(item.Entry.Path))
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{item.Entry.Path}\"");
+    }
+
+    [RelayCommand]
+    private Task RefreshDevice() => RefreshDeviceAsync();
+
+    private async Task RefreshDeviceAsync()
+    {
+        if (!IsConnected)
+        {
+            DeviceListNote = IsKanaliBlocking ? "Close KANALI to see what is stored on the cooler." : "Connect the cooler to see what is stored on it.";
+            return;
+        }
+        DeviceListBusy = true;
+        try
+        {
+            var media = await _engine.ListDeviceMediaAsync();
+            DeviceItems.Clear();
+            foreach (var m in media.OrderBy(m => m.IsPreset).ThenBy(m => m.Name, StringComparer.Ordinal))
+            {
+                var item = new DeviceMediaViewModel(m.Name, m.Size, m.IsPreset, m.ReadOnly, m.InUse);
+                if (DeviceThumbnailPath(m.Name) is { } png)
+                    item.Thumbnail = LoadImage(png);
+                DeviceItems.Add(item);
+            }
+            DeviceListNote = $"{media.Count} files on the cooler · {media.Count(m => m.IsPreset)} TRYX presets";
+        }
+        catch (Exception ex)
+        {
+            DeviceListNote = "Could not read the cooler: " + ex.Message;
+        }
+        finally
+        {
+            DeviceListBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task PlayDeviceItem(DeviceMediaViewModel item)
+    {
+        BackgroundDeviceFile = item.Name;
+        CurrentPage = "Studio";
+        if (HasDrawing)
+            Status = "Note: a drawing can only be baked into your own background, not into a file already on the cooler.";
+        await ApplyCoreAsync(includeBackground: true, quiet: false);
+        await RefreshDeviceAsync();
+    }
+
+    [RelayCommand]
+    private async Task DeleteDeviceItem(DeviceMediaViewModel item)
+    {
+        try
+        {
+            await _engine.DeleteDeviceMediaAsync(item.Name);
+            Status = $"Deleted {item.Name} from the cooler.";
+        }
+        catch (Exception ex)
+        {
+            Status = "Delete failed: " + ex.Message;
+        }
+        await RefreshDeviceAsync();
+    }
+
+    // ================================================================== drawing
+
+    /// <summary>Called by the ink canvas after each stroke change.</summary>
+    public void SetDrawingFromCanvas(string? isfBase64)
+    {
+        if (Drawing == isfBase64)
+            return;
+        Drawing = isfBase64;
+        BackgroundEdited();
+    }
+
+    [RelayCommand]
+    private void ClearDrawing()
+    {
+        if (!HasDrawing)
+            return;
+        Drawing = null;
+        DrawingReplaced?.Invoke(null);
+        BackgroundEdited();
+        Status = "Drawing cleared. Ctrl+Z to bring it back.";
+    }
+
+    [RelayCommand]
+    private void SetDrawColor(string hex) => DrawColor = hex;
+
+    /// <summary>Renders the drawing to a transparent canvas-size PNG for baking into the background.</summary>
+    private string? RenderDrawingPng(ScreenLayout layout)
+    {
+        if (string.IsNullOrEmpty(layout.Drawing))
+            return null;
+        var strokes = new System.Windows.Ink.StrokeCollection(new MemoryStream(Convert.FromBase64String(layout.Drawing)));
+        if (strokes.Count == 0)
+            return null;
+        var (w, h) = MediaPreparer.CanvasSize(layout.Orientation);
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+            strokes.Draw(dc);
+        var bitmap = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var buffer = new MemoryStream();
+        encoder.Save(buffer);
+        var bytes = buffer.ToArray();
+        var name = "ink-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes), 0, 8) + ".png";
+        var path = Path.Combine(_storage.MediaCacheDir, name);
+        if (!File.Exists(path))
+            File.WriteAllBytes(path, bytes);
+        return path;
+    }
 
     [RelayCommand]
     private void CloseKanali()
@@ -946,7 +1259,9 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             var progress = new Progress<string>(s => Status = s);
-            await _engine.ApplyAsync(BuildLayout(), includeBackground, progress);
+            var layout = BuildLayout();
+            var overlay = includeBackground && layout.Background.DeviceFile is null ? RenderDrawingPng(layout) : null;
+            await _engine.ApplyAsync(layout, includeBackground, overlay, progress);
             HasApplied = true;
             BackgroundDirty = false;
             _storage.AutoApply = true;

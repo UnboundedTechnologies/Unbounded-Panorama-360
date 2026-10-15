@@ -89,7 +89,8 @@ public sealed class DisplayEngine : IAsyncDisposable
     /// Sends a layout to the cooler. With <paramref name="includeBackground"/> the background is
     /// converted (cached), uploaded if the cooler does not have it yet, and set as the playing media.
     /// </summary>
-    public async Task ApplyAsync(ScreenLayout layout, bool includeBackground, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+    /// <param name="overlayPng">The drawing rendered as a transparent canvas-size PNG, or null.</param>
+    public async Task ApplyAsync(ScreenLayout layout, bool includeBackground, string? overlayPng = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {
         var snapshot = layout.Clone();
         await _apply.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -97,12 +98,18 @@ public sealed class DisplayEngine : IAsyncDisposable
         {
             var session = _session ?? throw new InvalidOperationException("The cooler is not connected.");
             string? mediaName = null;
-            if (includeBackground)
+            if (includeBackground && snapshot.Background.DeviceFile is { } deviceFile)
             {
-                // No background chosen means a black screen, not whatever was playing before.
-                var prepared = snapshot.Background.SourcePath is null
-                    ? await _preparer.PrepareBlackAsync(cancellationToken).ConfigureAwait(false)
-                    : await _preparer.PrepareAsync(snapshot.Background, snapshot.Orientation, progress, cancellationToken).ConfigureAwait(false);
+                // A file already on the cooler (preset or earlier upload): just play it.
+                var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
+                if (!catalog.MediaFileList.Concat(catalog.PresetFileList).Any(e => PanoramaSession.MediaName(e) == deviceFile))
+                    throw new InvalidOperationException($"“{deviceFile}” is no longer on the cooler.");
+                mediaName = deviceFile;
+            }
+            else if (includeBackground)
+            {
+                // No background chosen means a black screen (plus the drawing), not whatever played before.
+                var prepared = await _preparer.PrepareAsync(snapshot.Background, snapshot.Orientation, overlayPng, progress, cancellationToken).ConfigureAwait(false);
                 var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
                 var existing = catalog.MediaFileList.FirstOrDefault(e => PanoramaSession.MediaName(e) == prepared.RemoteName);
                 if (existing is null || existing.FileSize != prepared.Size)
@@ -173,17 +180,77 @@ public sealed class DisplayEngine : IAsyncDisposable
         }
     }
 
+    // ------------------------------------------------------------------ device library
+
+    public sealed record DeviceMedia(string Name, long Size, bool IsPreset, bool ReadOnly, bool InUse);
+
+    /// <summary>Everything stored on the cooler, with what is currently in use.</summary>
+    public async Task<IReadOnlyList<DeviceMedia>> ListDeviceMediaAsync(CancellationToken cancellationToken = default)
+    {
+        await _apply.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var session = _session ?? throw new InvalidOperationException("The cooler is not connected.");
+            var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
+            var inUse = InUse(await session.GetUserConfigurationAsync(cancellationToken).ConfigureAwait(false));
+            var list = new List<DeviceMedia>();
+            foreach (var e in catalog.MediaFileList)
+            {
+                var name = PanoramaSession.MediaName(e);
+                list.Add(new DeviceMedia(name, e.FileSize, false, e.ReadOnly, inUse.Contains(name)));
+            }
+            foreach (var e in catalog.PresetFileList)
+            {
+                var name = PanoramaSession.MediaName(e);
+                list.Add(new DeviceMedia(name, e.FileSize, true, true, inUse.Contains(name)));
+            }
+            return list;
+        }
+        finally
+        {
+            _apply.Release();
+        }
+    }
+
+    /// <summary>Deletes one user file from the cooler; presets, read-only and in-use files are refused.</summary>
+    public async Task DeleteDeviceMediaAsync(string name, CancellationToken cancellationToken = default)
+    {
+        await _apply.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var session = _session ?? throw new InvalidOperationException("The cooler is not connected.");
+            var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
+            var entry = catalog.MediaFileList.FirstOrDefault(e => PanoramaSession.MediaName(e) == name)
+                ?? throw new InvalidOperationException("Only your own uploads can be deleted (not TRYX presets).");
+            if (entry.ReadOnly || name.StartsWith("default_", StringComparison.Ordinal))
+                throw new InvalidOperationException("This file is read-only on the cooler.");
+            if (InUse(await session.GetUserConfigurationAsync(cancellationToken).ConfigureAwait(false)).Contains(name))
+                throw new InvalidOperationException("This file is playing (or set for power-on/standby). Choose another background first.");
+            await session.RemoveMediaAsync(name, cancellationToken).ConfigureAwait(false);
+            var after = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
+            if (after.MediaFileList.Any(e => PanoramaSession.MediaName(e) == name))
+                throw new DeviceProtocolException("The cooler acknowledged the delete but still lists the file.");
+            Log?.Invoke($"deleted {name} from the cooler");
+        }
+        finally
+        {
+            _apply.Release();
+        }
+    }
+
+    private static HashSet<string> InUse(UserConfiguration config) => new(StringComparer.Ordinal)
+    {
+        Bare(config.WorkConfig?.SingleModeMediaFile),
+        Bare(config.WorkConfig?.DualModeLeftMediaFile),
+        Bare(config.WorkConfig?.DualModeRightMediaFile),
+        Bare(config.PoweronConfig?.MediaFile),
+        Bare(config.StandbyConfig?.MediaFile),
+    };
+
     /// <summary>Deletes our own earlier backgrounds that nothing on the cooler uses any more.</summary>
     private async Task RemoveStaleUploadsAsync(PanoramaSession session, UserConfiguration config, CancellationToken cancellationToken)
     {
-        var inUse = new HashSet<string>(StringComparer.Ordinal)
-        {
-            Bare(config.WorkConfig?.SingleModeMediaFile),
-            Bare(config.WorkConfig?.DualModeLeftMediaFile),
-            Bare(config.WorkConfig?.DualModeRightMediaFile),
-            Bare(config.PoweronConfig?.MediaFile),
-            Bare(config.StandbyConfig?.MediaFile),
-        };
+        var inUse = InUse(config);
         var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
         foreach (var entry in catalog.MediaFileList)
         {

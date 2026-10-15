@@ -1,0 +1,202 @@
+<UserControl x:Class="Unbounded.Panorama.App.Views.LibraryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Unbounded.Panorama.App.ViewModels">
+    <UserControl.Resources>
+        <Style x:Key="MediaCard" TargetType="Border">
+            <Setter Property="Width" Value="210" />
+            <Setter Property="Margin" Value="0,0,16,16" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="{StaticResource Glass2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource EdgeGradient}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform />
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="#AA00E5FF" />
+                    <Setter Property="Effect" Value="{StaticResource Glow}" />
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1.03" Duration="0:0:0.15" />
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1.03" Duration="0:0:0.15" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.15" />
+                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.15" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="Pill" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="Background" Value="#CC05070D" />
+            <Setter Property="BorderBrush" Value="#5500E5FF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="10" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="16,6,16,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="4,4,4,18">
+            <Border Background="{StaticResource Field}" CornerRadius="10" DockPanel.Dock="Right" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource Segment}" GroupName="libtab" Tag="Mine" Checked="OnTab" x:Name="MineTab">MY MEDIA</RadioButton>
+                    <RadioButton Style="{StaticResource Segment}" GroupName="libtab" Tag="Cooler" Checked="OnTab">ON THE COOLER</RadioButton>
+                </StackPanel>
+            </Border>
+            <StackPanel>
+                <TextBlock Text="LIBRARY" Style="{StaticResource Kicker}" />
+                <TextBlock Text="Your media" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="Everything you imported or used, and what is stored on the cooler. One click puts it on the screen."
+                           Foreground="{StaticResource Muted}" FontSize="12.5" Margin="0,2,0,0" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- My media -->
+        <Grid Grid.Row="1" Visibility="{Binding LibraryTab, Converter={StaticResource IsVisible}, ConverterParameter=Mine}">
+            <Border Style="{StaticResource Card}" HorizontalAlignment="Left" VerticalAlignment="Top" Width="460"
+                    Visibility="{Binding LibraryItems.Count, Converter={StaticResource IsVisible}, ConverterParameter=0}">
+                <StackPanel>
+                    <TextBlock Text="NOTHING HERE YET" Style="{StaticResource SectionTitle}" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12.5" Margin="0,8,0,12"
+                               Text="Images, GIFs, videos and YouTube clips you use as a background appear here, so you can bring them back in one click." />
+                    <WrapPanel>
+                        <Button Content="Choose file…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
+                        <Button Content="Import from YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding LibraryItems}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:LibraryItemViewModel}">
+                            <Border x:Name="card" Style="{StaticResource MediaCard}">
+                                <StackPanel>
+                                    <Grid Height="300">
+                                        <Border CornerRadius="15,15,0,0" ClipToBounds="True" Background="#0A0E16">
+                                            <Grid>
+                                                <TextBlock Text="&#xE8B9;" FontFamily="{StaticResource Icons}" FontSize="34" Foreground="{StaticResource Dim}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                            </Grid>
+                                        </Border>
+                                        <Border Style="{StaticResource Pill}">
+                                            <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Accent}" />
+                                        </Border>
+                                        <Border Style="{StaticResource Pill}" HorizontalAlignment="Right" BorderBrush="#663DDC97"
+                                                Visibility="{Binding IsCurrent, Converter={StaticResource Visible}}">
+                                            <TextBlock Text="CURRENT" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="#3DDC97" />
+                                        </Border>
+                                    </Grid>
+                                    <StackPanel Margin="14,12,14,14">
+                                        <TextBlock Text="{Binding Title}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,10" />
+                                        <DockPanel>
+                                            <Button Style="{StaticResource Tool}" DockPanel.Dock="Right" ToolTip="Remove from library (downloaded YouTube clips are deleted)"
+                                                    Command="{Binding DataContext.ForgetLibraryItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                                <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE74D;" Foreground="#FF8FA3" FontSize="13" />
+                                            </Button>
+                                            <Button Style="{StaticResource Tool}" DockPanel.Dock="Right" ToolTip="Show in Explorer"
+                                                    Command="{Binding DataContext.RevealLibraryItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                                <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE838;" FontSize="13" />
+                                            </Button>
+                                            <Button Content="Use" Style="{StaticResource Primary}" FontSize="13" Padding="14,5" HorizontalAlignment="Left"
+                                                    Command="{Binding DataContext.UseLibraryItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding Exists}" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- On the cooler -->
+        <Grid Grid.Row="1" Visibility="{Binding LibraryTab, Converter={StaticResource IsVisible}, ConverterParameter=Cooler}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <DockPanel Margin="4,0,4,14">
+                <Button Content="Refresh" Style="{StaticResource Chip}" Margin="0" DockPanel.Dock="Right" Command="{Binding RefreshDeviceCommand}" />
+                <TextBlock Text="{Binding DeviceListNote}" Foreground="{StaticResource Muted}" FontSize="12.5" VerticalAlignment="Center" />
+            </DockPanel>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding DeviceItems}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:DeviceMediaViewModel}">
+                            <Border Style="{StaticResource MediaCard}">
+                                <StackPanel>
+                                    <Grid Height="170">
+                                        <Border CornerRadius="15,15,0,0" ClipToBounds="True">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#1A00E5FF" Offset="0" />
+                                                    <GradientStop Color="#228B5CF6" Offset="1" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <Grid>
+                                                <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource Icons}" FontSize="34" Foreground="#6600E5FF"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                            </Grid>
+                                        </Border>
+                                        <Border Style="{StaticResource Pill}">
+                                            <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Accent}" />
+                                        </Border>
+                                    </Grid>
+                                    <StackPanel Margin="14,12,14,14">
+                                        <TextBlock Text="{Binding Title}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource Muted}" FontSize="10.5" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                        <TextBlock Text="{Binding SizeText}" Foreground="{StaticResource Dim}" FontSize="10.5" Margin="0,0,0,10" />
+                                        <DockPanel>
+                                            <Button Style="{StaticResource Tool}" DockPanel.Dock="Right" ToolTip="Delete from the cooler"
+                                                    Command="{Binding DataContext.DeleteDeviceItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding CanDelete}">
+                                                <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE74D;" Foreground="#FF8FA3" FontSize="13" />
+                                            </Button>
+                                            <Button Content="Play" Style="{StaticResource Primary}" FontSize="13" Padding="14,5" HorizontalAlignment="Left"
+                                                    Command="{Binding DataContext.PlayDeviceItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,87 @@
+<UserControl x:Class="Unbounded.Panorama.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="16,6,16,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <StackPanel Margin="4,4,4,18">
+            <TextBlock Text="SETTINGS" Style="{StaticResource Kicker}" />
+            <TextBlock Text="Preferences" Style="{StaticResource PageTitle}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="440" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="DISPLAY" Style="{StaticResource SectionTitle}" />
+                        <DockPanel Margin="0,14,0,4">
+                            <TextBlock Text="{Binding Brightness, StringFormat={}{0}%}" DockPanel.Dock="Right" Foreground="{StaticResource Accent}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14" />
+                            <TextBlock Text="Brightness" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <Slider Minimum="0" Maximum="100" Value="{Binding Brightness, Delay=200}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                        <CheckBox Content="Show temperatures in Fahrenheit (°F)" IsChecked="{Binding Fahrenheit}" Margin="0,16,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="STARTUP" Style="{StaticResource SectionTitle}" />
+                        <CheckBox Content="Start with Windows (in the tray, no UAC prompt)" IsChecked="{Binding StartWithWindows}" Margin="0,14,0,0" />
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="11.5" Margin="0,8,0,0"
+                                   Text="Uses a Task Scheduler entry with administrator rights, which CPU temperature, clocks and power need (like HWiNFO). Your saved design is restored on the cooler as soon as it connects." />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="ABOUT" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Margin="0,12,0,0" FontSize="12.5">
+                            <Run Text="Unbounded Panorama 360 " /><Run Text="{Binding AppVersion, Mode=OneWay}" Foreground="{StaticResource Accent}" />
+                        </TextBlock>
+                        <TextBlock Text="{Binding EngineDetail}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,4,0,0" />
+                        <TextBlock Margin="0,10,0,0" FontSize="12">
+                            <Hyperlink NavigateUri="https://github.com/UnboundedTechnologies/Unbounded-Panorama-360" RequestNavigate="OnLink" Foreground="{StaticResource Accent}">
+                                github.com/UnboundedTechnologies/Unbounded-Panorama-360
+                            </Hyperlink>
+                        </TextBlock>
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Dim}" FontSize="11" Margin="0,10,0,0"
+                                   Text="Protocol knowledge from DXVSI/Tryx-Linux-GUI (MIT). Fonts: Roboto (Apache 2.0), Rajdhani (OFL). Not affiliated with TRYX or KANALI." />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Border Grid.Column="2" Style="{StaticResource Card}" Margin="0">
+                <DockPanel>
+                    <TextBlock Text="ACTIVITY" Style="{StaticResource SectionTitle}" DockPanel.Dock="Top" Margin="0,0,0,10" />
+                    <ListBox x:Name="Log" ItemsSource="{Binding LogLines}" Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontSize="11.5" Foreground="{StaticResource Muted}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" Margin="0,1" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

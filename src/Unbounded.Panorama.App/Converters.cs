@@ -64,6 +64,16 @@ public sealed class EqualsConverter : IValueConverter
         value is true ? parameter! : Binding.DoNothing;
 }
 
+/// <summary>Visible when the bound value equals the parameter (page switching).</summary>
+public sealed class EqualsToVisibility : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 public sealed class EnumLabel : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch

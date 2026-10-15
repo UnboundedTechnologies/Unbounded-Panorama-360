@@ -1,0 +1,681 @@
+<UserControl x:Class="Unbounded.Panorama.App.Views.StudioView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Unbounded.Panorama.App.ViewModels"
+             xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core">
+    <UserControl.Resources>
+        <DataTemplate x:Key="EnumItem">
+            <TextBlock Text="{Binding Converter={StaticResource EnumLabel}}" />
+        </DataTemplate>
+        <Style x:Key="Sep" TargetType="Border">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="6,0" />
+            <Setter Property="Background" Value="{StaticResource Line}" />
+        </Style>
+        <Style x:Key="DrawToolButton" TargetType="RadioButton">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="b" Background="Transparent" CornerRadius="8" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#1A00E5FF" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#2600E5FF" />
+                                <Setter TargetName="b" Property="BorderBrush" Value="#6600E5FF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="370" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ============================================================ left -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="16,6,8,16">
+                <!-- Presets -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="PRESETS" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="Your saved designs and starter templates" Style="{StaticResource Label}" Margin="0,2,0,8" />
+                        <DockPanel>
+                            <Button Content="Load" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right" Command="{Binding LoadPresetCommand}" />
+                            <ComboBox ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}" DisplayMemberPath="Display" />
+                        </DockPanel>
+                        <DockPanel Margin="0,8,0,0">
+                            <Button Content="Delete" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right" Command="{Binding DeletePresetCommand}"
+                                    IsEnabled="{Binding CanDeletePreset}" />
+                            <Button Content="Save" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right" Command="{Binding SavePresetCommand}"
+                                    ToolTip="Save the current design under this name (overwrites a preset with the same name)" />
+                            <TextBox Text="{Binding PresetName, UpdateSourceTrigger=PropertyChanged}" ToolTip="Preset name" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Background -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button Content="Library" Style="{StaticResource Chip}" Margin="0" DockPanel.Dock="Right" Command="{Binding NavigateCommand}" CommandParameter="Library" />
+                            <TextBlock Text="BACKGROUND" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding BackgroundName}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,6,0,10" />
+                        <WrapPanel>
+                            <Button Content="Choose file…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
+                            <Button Content="YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
+                            <Button Content="Clear" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}" />
+                        </WrapPanel>
+                        <TextBlock Text="Drop an image, GIF or video file anywhere on the window, or press Ctrl+V with a copied YouTube link or file."
+                                   Foreground="{StaticResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <StackPanel Visibility="{Binding HasBackground, Converter={StaticResource Visible}}">
+                            <TextBlock Text="Sizing" Style="{StaticResource Label}" />
+                            <ComboBox ItemsSource="{Binding Fits}" SelectedItem="{Binding BackgroundFit}" ItemTemplate="{StaticResource EnumItem}" />
+                            <TextBlock Text="Framing — horizontal / vertical" Style="{StaticResource Label}" />
+                            <Slider Minimum="0" Maximum="1" Value="{Binding CropX, Delay=300}" ToolTip="Which part of a wide source fills the screen" />
+                            <Slider Minimum="0" Maximum="1" Value="{Binding CropY, Delay=300}" Margin="0,6,0,0" />
+                            <Grid Margin="0,4,0,0" Visibility="{Binding IsVideoBackground, Converter={StaticResource Visible}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Start in file (s)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding StartSeconds, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Length (s, empty = all)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding DurationSeconds, UpdateSourceTrigger=LostFocus, TargetNullValue=''}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                        <DockPanel Margin="0,12,0,4">
+                            <TextBlock Text="{Binding Brightness, StringFormat={}{0}%}" DockPanel.Dock="Right" Foreground="{StaticResource Accent}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="13" />
+                            <TextBlock Text="Brightness" Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <Slider Minimum="0" Maximum="100" Value="{Binding Brightness, Delay=200}" IsSnapToTickEnabled="True" TickFrequency="1" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Widgets -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <DockPanel>
+                            <TextBlock Text="{Binding WidgetCount}" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center" />
+                            <TextBlock Text="WIDGETS" Style="{StaticResource SectionTitle}" />
+                        </DockPanel>
+                        <WrapPanel Margin="0,10,0,4">
+                            <Button Content="+ Text" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Text}" />
+                            <Button Content="+ Sensor" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Sensor}" />
+                            <Button Content="+ Clock" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Clock}" />
+                            <Button Content="+ Date" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.Date}" />
+                            <Button Content="+ CPU badge" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.CpuName}" />
+                            <Button Content="+ GPU badge" Style="{StaticResource Chip}" Command="{Binding AddWidgetCommand}" CommandParameter="{x:Static layout:WidgetContent.GpuName}" />
+                        </WrapPanel>
+                        <ItemsControl ItemsSource="{Binding Widgets}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:WidgetViewModel}">
+                                    <Border x:Name="row" CornerRadius="9" Padding="6,4" Margin="0,1" Background="Transparent" BorderThickness="1" BorderBrush="Transparent"
+                                            Cursor="Hand" MouseLeftButtonDown="OnListRowClick" Tag="{Binding}">
+                                        <DockPanel>
+                                            <Button Style="{StaticResource Tool}" Width="28" Height="26" DockPanel.Dock="Right"
+                                                    Command="{Binding DataContext.ToggleLockedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    ToolTip="Lock (cannot be moved)">
+                                                <TextBlock x:Name="lock" Style="{StaticResource IconGlyph}" FontSize="12" Text="&#xE785;" Foreground="{StaticResource Muted}" />
+                                            </Button>
+                                            <Button Style="{StaticResource Tool}" Width="28" Height="26" DockPanel.Dock="Right"
+                                                    Command="{Binding DataContext.ToggleHiddenCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                    ToolTip="Show / hide on the cooler">
+                                                <TextBlock x:Name="eye" Style="{StaticResource IconGlyph}" FontSize="12" Text="&#xE890;" Foreground="{StaticResource Muted}" />
+                                            </Button>
+                                            <Border Width="26" Height="26" CornerRadius="7" Background="#14FFFFFF" Margin="0,0,10,0">
+                                                <TextBlock Text="{Binding Kind}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12" Foreground="{Binding ColorBrush}" />
+                                            </Border>
+                                            <TextBlock x:Name="title" Text="{Binding Title}" VerticalAlignment="Center" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter TargetName="row" Property="Background" Value="#2200E5FF" />
+                                            <Setter TargetName="row" Property="BorderBrush" Value="#5500E5FF" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Hidden}" Value="True">
+                                            <Setter TargetName="eye" Property="Text" Value="&#xED1A;" />
+                                            <Setter TargetName="eye" Property="Foreground" Value="#FF7A59" />
+                                            <Setter TargetName="title" Property="Opacity" Value="0.45" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Locked}" Value="True">
+                                            <Setter TargetName="lock" Property="Text" Value="&#xE72E;" />
+                                            <Setter TargetName="lock" Property="Foreground" Value="#FFC247" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ============================================================ centre -->
+        <Grid Grid.Column="1" Margin="12,6,12,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Toolbar -->
+            <Border Background="{StaticResource Glass2}" BorderBrush="{StaticResource EdgeGradient}" BorderThickness="1" CornerRadius="14" Padding="6,5" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <Border Background="{StaticResource Field}" CornerRadius="10">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Select" x:Name="SelectMode" ToolTip="Move and edit widgets">SELECT</RadioButton>
+                            <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Draw" x:Name="DrawMode" ToolTip="Draw freely on the screen">DRAW</RadioButton>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Sep}" />
+                    <Border Background="{StaticResource Field}" CornerRadius="10">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsPortrait}" ToolTip="Vertical — for a cooler mounted upright">PORTRAIT</RadioButton>
+                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsLandscape}" ToolTip="Horizontal — the panel's native orientation">LANDSCAPE</RadioButton>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Sep}" />
+
+                    <!-- Select tools -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsDrawMode, Converter={StaticResource Hidden}}">
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Left}" ToolTip="Align left (to the screen, or to each other when several are selected)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignLeft}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.CenterH}" ToolTip="Centre horizontally">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignCenterH}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Right}" ToolTip="Align right">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignRight}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Top}" ToolTip="Align top">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignTop}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Middle}" ToolTip="Centre vertically">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignMiddle}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Bottom}" ToolTip="Align bottom">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignBottom}" />
+                        </Button>
+                        <Border Style="{StaticResource Sep}" />
+                        <Button Style="{StaticResource Tool}" Command="{Binding DistributeCommand}" CommandParameter="H" ToolTip="Distribute horizontally (equal gaps, 3+ selected)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoDistH}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding DistributeCommand}" CommandParameter="V" ToolTip="Distribute vertically (equal gaps, 3+ selected)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoDistV}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding MatchWidthCommand}" ToolTip="Same width as the last-clicked widget">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoMatchW}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding CenterOnScreenCommand}" CommandParameter="H" ToolTip="Centre the selection on the screen (keeps their spacing)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoCenterScreen}" />
+                        </Button>
+                        <Border Style="{StaticResource Sep}" />
+                        <ToggleButton Style="{StaticResource ToolToggle}" IsChecked="{Binding SnapEnabled}" ToolTip="Magnet: snap to centre, edges, other widgets and equal spacing (hold Alt to move freely)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoMagnet}" />
+                        </ToggleButton>
+                        <ToggleButton Style="{StaticResource ToolToggle}" IsChecked="{Binding ShowCurveGuide}" ToolTip="Show where the screen bends">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoCurve}" />
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <!-- Draw tools -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsDrawMode, Converter={StaticResource Visible}}">
+                        <RadioButton Style="{StaticResource DrawToolButton}" GroupName="tool" Tag="{x:Static vm:DrawTool.Pen}" Checked="OnToolChecked" x:Name="PenTool" ToolTip="Pen">
+                            <TextBlock Style="{StaticResource IconGlyph}" Text="&#xEE56;" Foreground="{StaticResource Accent}" />
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource DrawToolButton}" GroupName="tool" Tag="{x:Static vm:DrawTool.Line}" Checked="OnToolChecked" ToolTip="Line (hold Shift for straight angles)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoLine}" Fill="{x:Null}" StrokeThickness="2" />
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource DrawToolButton}" GroupName="tool" Tag="{x:Static vm:DrawTool.Rectangle}" Checked="OnToolChecked" ToolTip="Rectangle (Shift = square)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoRect}" Fill="{x:Null}" />
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource DrawToolButton}" GroupName="tool" Tag="{x:Static vm:DrawTool.Ellipse}" Checked="OnToolChecked" ToolTip="Ellipse (Shift = circle)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoEllipse}" Fill="{x:Null}" />
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource DrawToolButton}" GroupName="tool" Tag="{x:Static vm:DrawTool.Eraser}" Checked="OnToolChecked" ToolTip="Eraser (removes whole strokes)">
+                            <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE75C;" />
+                        </RadioButton>
+                        <Border Style="{StaticResource Sep}" />
+                        <ItemsControl ItemsSource="{Binding Swatches}" VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Width="18" Height="18" Margin="2,0" Padding="0" Background="{Binding}" BorderThickness="0" ToolTip="{Binding}"
+                                            Command="{Binding DataContext.SetDrawColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Ellipse Fill="{TemplateBinding Background}" Stroke="#33FFFFFF" StrokeThickness="1" />
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Width="22" Height="22" CornerRadius="11" Margin="6,0" BorderBrush="White" BorderThickness="2" ToolTip="Current colour">
+                            <Border.Background>
+                                <SolidColorBrush Color="{Binding DrawColor}" />
+                            </Border.Background>
+                        </Border>
+                        <Border Style="{StaticResource Sep}" />
+                        <Slider Width="110" Minimum="2" Maximum="80" Value="{Binding DrawSize}" VerticalAlignment="Center" ToolTip="Thickness" />
+                        <TextBlock Text="{Binding DrawSize, StringFormat={}{0:0} px}" Width="44" Margin="6,0,0,0" VerticalAlignment="Center"
+                                   FontFamily="{StaticResource Display}" FontWeight="SemiBold" Foreground="{StaticResource Accent}" />
+                        <Button Style="{StaticResource Tool}" Command="{Binding ClearDrawingCommand}" ToolTip="Clear the whole drawing">
+                            <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE74D;" Foreground="#FF8FA3" />
+                        </Button>
+                    </StackPanel>
+
+                    <Border Style="{StaticResource Sep}" />
+                    <Button Style="{StaticResource Tool}" Command="{Binding UndoCommand}" IsEnabled="{Binding CanUndo}" ToolTip="Undo (Ctrl+Z)">
+                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE7A7;" />
+                    </Button>
+                    <Button Style="{StaticResource Tool}" Command="{Binding RedoCommand}" IsEnabled="{Binding CanRedo}" ToolTip="Redo (Ctrl+Y)">
+                        <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE7A6;" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- The cooler -->
+            <Viewbox Grid.Row="1" Stretch="Uniform" Margin="0,18,0,4">
+                <Grid Margin="70">
+                    <!-- Ambient glow behind the device -->
+                    <Border CornerRadius="90" Background="#1A00E5FF" Margin="-40" Effect="{StaticResource SoftGlow}" />
+                    <Border CornerRadius="72" Padding="14" Background="#0A0E16" BorderThickness="6">
+                        <Border.BorderBrush>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#5A6478" Offset="0" />
+                                <GradientStop Color="#1B2130" Offset="0.5" />
+                                <GradientStop Color="#3A4256" Offset="1" />
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border CornerRadius="58" ClipToBounds="True" BorderBrush="#6600E5FF" BorderThickness="3">
+                            <Grid x:Name="Screen" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" Background="Black" ClipToBounds="True"
+                                  MouseLeftButtonDown="OnScreenMouseDown" MouseMove="OnScreenMouseMove" MouseLeftButtonUp="OnScreenMouseUp" Focusable="True">
+                                <Image Source="{Binding BackgroundPreview}" Stretch="Fill" IsHitTestVisible="False" />
+
+                                <Grid IsHitTestVisible="False" Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
+                                    <Grid Visibility="{Binding ShowCurveGuide, Converter={StaticResource Visible}}">
+                                        <Line X1="0" X2="1080" Y1="1100" Y2="1100" Stroke="#6600E5FF" StrokeThickness="3" StrokeDashArray="8 8" />
+                                        <TextBlock Text="SCREEN BENDS HERE" Foreground="#9900E5FF" FontSize="28" FontFamily="{StaticResource Display}" FontWeight="SemiBold" Margin="18,1058,0,0" />
+                                    </Grid>
+                                </Grid>
+
+                                <!-- Free drawing (baked into the background on Apply) -->
+                                <InkCanvas x:Name="Ink" Background="Transparent" IsHitTestVisible="{Binding IsDrawMode}"
+                                           Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" />
+
+                                <ItemsControl ItemsSource="{Binding Widgets}" IsHitTestVisible="{Binding IsDrawMode, Converter={StaticResource Is}, ConverterParameter=False}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <Canvas />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                            <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:WidgetViewModel}">
+                                            <Grid Width="{Binding Width}" Height="{Binding Height}" Opacity="{Binding Opacity}">
+                                                <Grid x:Name="body" Background="Transparent" Tag="{Binding}" MouseLeftButtonDown="OnWidgetMouseDown" Cursor="SizeAll">
+                                                    <Border x:Name="sel" BorderThickness="3" BorderBrush="Transparent" CornerRadius="6" Margin="-6" />
+                                                    <Border Background="{Binding BadgeBrush}" CornerRadius="{Binding BadgeCorner}"
+                                                            HorizontalAlignment="{Binding HorizontalAlign}" VerticalAlignment="Top">
+                                                        <Border.Padding>
+                                                            <MultiBinding Converter="{StaticResource BadgePadding}">
+                                                                <Binding Path="Badge" />
+                                                                <Binding Path="Size" />
+                                                            </MultiBinding>
+                                                        </Border.Padding>
+                                                        <TextBlock Text="{Binding PreviewText}" Foreground="{Binding ColorBrush}" FontSize="{Binding Size}"
+                                                                   FontWeight="{Binding FontWeightValue}" FontFamily="{x:Static vm:WidgetViewModel.Roboto}"
+                                                                   TextOptions.TextFormattingMode="Ideal" TextWrapping="NoWrap" />
+                                                    </Border>
+                                                </Grid>
+                                                <Thumb x:Name="grip" HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="24" Margin="0,0,-18,0" Cursor="SizeWE"
+                                                       DragStarted="OnResizeStarted" DragDelta="OnResizeDelta" DragCompleted="OnResizeCompleted" Visibility="Collapsed">
+                                                    <Thumb.Template>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Border Background="#00E5FF" CornerRadius="6" Width="12" />
+                                                        </ControlTemplate>
+                                                    </Thumb.Template>
+                                                </Thumb>
+                                            </Grid>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                    <Setter TargetName="sel" Property="BorderBrush" Value="#00E5FF" />
+                                                    <Setter TargetName="grip" Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Locked}" Value="True">
+                                                    <Setter TargetName="body" Property="Cursor" Value="No" />
+                                                    <Setter TargetName="grip" Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                                <Trigger SourceName="body" Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="sel" Property="Background" Value="#1400E5FF" />
+                                                </Trigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Canvas x:Name="GuideLayer" IsHitTestVisible="False" />
+                                <Canvas IsHitTestVisible="False">
+                                    <Rectangle x:Name="Marquee" Visibility="Collapsed" Fill="#2200E5FF" Stroke="#00E5FF" StrokeThickness="3" StrokeDashArray="4 3" />
+                                </Canvas>
+                            </Grid>
+                        </Border>
+                    </Border>
+                </Grid>
+            </Viewbox>
+
+            <DockPanel Grid.Row="2" Margin="4,6,4,0">
+                <TextBlock Text="{Binding DragInfo}" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource Accent}" FontFamily="Cascadia Mono, Consolas" />
+                <TextBlock FontSize="11.5" Foreground="{StaticResource Dim}" TextTrimming="CharacterEllipsis"
+                           Text="Drag to move · Ctrl-click or drag a box to multi-select · Alt = no magnet · arrows nudge (Shift ×10) · Ctrl+Z / Ctrl+Y · Ctrl+D duplicate · Del removes · Ctrl+wheel text size" />
+            </DockPanel>
+        </Grid>
+
+        <!-- ============================================================ inspector -->
+        <Grid Grid.Column="2">
+            <!-- Draw mode help -->
+            <StackPanel Margin="8,6,16,16" Visibility="{Binding IsDrawMode, Converter={StaticResource Visible}}">
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="DRAW MODE" Style="{StaticResource SectionTitle}" />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Muted}" Margin="0,8,0,0"
+                                   Text="Draw anything with the pen, lines, rectangles and ellipses. Shift keeps lines straight and shapes square or round. The eraser removes whole strokes." />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Muted}" Margin="0,10,0,0"
+                                   Text="Your drawing is baked into the background video when you press Apply, so it stays put while the live widgets update on top." />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Warm}" Margin="0,10,0,0"
+                                   Visibility="{Binding BackgroundDeviceFile, Converter={StaticResource Visible}}"
+                                   Text="The background is a file already on the cooler; drawings can only be added to your own backgrounds (a file, YouTube clip or the black screen)." />
+                        <Button Content="Back to select" Style="{StaticResource Chip}" Margin="0,14,0,0" HorizontalAlignment="Left" Click="OnBackToSelect" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Grid Visibility="{Binding IsDrawMode, Converter={StaticResource Hidden}}">
+                <StackPanel Margin="8,6,16,16" Visibility="{Binding SelectedWidget, Converter={StaticResource Hidden}}">
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="NOTHING SELECTED" Style="{StaticResource SectionTitle}" />
+                            <TextBlock Text="Click a widget on the screen to edit it, Ctrl-click to select several, or add one from the left." Foreground="{StaticResource Muted}"
+                                       FontSize="12.5" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding SelectedWidget, Converter={StaticResource Visible}}">
+                    <StackPanel Margin="8,6,16,16">
+                        <Border Style="{StaticResource Card}" Background="#2200E5FF" Visibility="{Binding HasMultiSelection, Converter={StaticResource Visible}}">
+                            <TextBlock TextWrapping="Wrap" FontSize="12">
+                                <Run Text="{Binding SelectionCount, Mode=OneWay}" /><Run Text=" widgets selected. Use the toolbar to align, distribute or match widths; colours apply to all. Below edits the last one clicked." />
+                            </TextBlock>
+                        </Border>
+
+                        <StackPanel DataContext="{Binding SelectedWidget}">
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button Content="Delete" Style="{StaticResource Chip}" Margin="6,0,0,0" DockPanel.Dock="Right"
+                                                Command="{Binding DataContext.DeleteWidgetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        <Button Content="Duplicate" Style="{StaticResource Chip}" Margin="0" DockPanel.Dock="Right"
+                                                Command="{Binding DataContext.DuplicateWidgetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        <TextBlock Text="CONTENT" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <TextBlock Text="Shows" Style="{StaticResource Label}" />
+                                    <ComboBox ItemsSource="{Binding DataContext.ContentKinds, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              SelectedItem="{Binding Content}" ItemTemplate="{StaticResource EnumItem}" />
+
+                                    <StackPanel Visibility="{Binding IsTextContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Text" Style="{StaticResource Label}" />
+                                        <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                    </StackPanel>
+
+                                    <StackPanel Visibility="{Binding IsSensorContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Sensor" Style="{StaticResource Label}" />
+                                        <TextBox Text="{Binding DataContext.SensorFilter, RelativeSource={RelativeSource AncestorType=UserControl}, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+                                                 ToolTip="Search, e.g. “tctl”, “gpu core”, “fan”" />
+                                        <ItemsControl ItemsSource="{Binding DataContext.SensorTypeChoices, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,8,0,2">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <RadioButton Style="{StaticResource ChipToggle}" GroupName="sensorType" Content="{Binding}" Checked="OnSensorTypeChecked"
+                                                                 Tag="{Binding}" Loaded="OnSensorTypeLoaded" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Border BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Background="{StaticResource Field}" Height="300" Margin="0,4,0,0">
+                                            <ListBox ItemsSource="{Binding DataContext.SensorView, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                     SelectedItem="{Binding DataContext.SelectedSensorRow, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                     Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource WidgetListItem}"
+                                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                                     VirtualizingPanel.IsVirtualizing="True" Padding="4">
+                                                <ListBox.GroupStyle>
+                                                    <GroupStyle>
+                                                        <GroupStyle.HeaderTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Name}" FontSize="12" FontFamily="{StaticResource Display}" FontWeight="Bold"
+                                                                           Foreground="{StaticResource Accent}" Margin="6,10,0,3" TextTrimming="CharacterEllipsis" />
+                                                            </DataTemplate>
+                                                        </GroupStyle.HeaderTemplate>
+                                                    </GroupStyle>
+                                                </ListBox.GroupStyle>
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:SensorRow}">
+                                                        <DockPanel>
+                                                            <TextBlock Text="{Binding ValueText}" DockPanel.Dock="Right" FontSize="13" FontFamily="{StaticResource Display}" FontWeight="SemiBold"
+                                                                       Foreground="{StaticResource Accent}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Name}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{Binding Type}" FontSize="10.5" Foreground="{StaticResource Muted}" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                        </Border>
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Decimals" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding Decimals, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+                                            <CheckBox Grid.Column="2" Content="Show unit" IsChecked="{Binding ShowUnit}" VerticalAlignment="Bottom" Margin="0,0,0,6" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Visibility="{Binding IsTimeContent, Converter={StaticResource Visible}}">
+                                        <TextBlock Text="Format" Style="{StaticResource Label}" />
+                                        <TextBox Text="{Binding Format, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Button Content="HH:mm" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="HH:mm:ss" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="h:mm tt" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="dddd d MMMM" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="ddd d MMM" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                            <Button Content="dd/MM/yyyy" Style="{StaticResource Chip}" Click="OnFormatPreset" />
+                                        </WrapPanel>
+                                    </StackPanel>
+
+                                    <Grid Visibility="{Binding UsesAffixes, Converter={StaticResource Visible}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Text before" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Prefix, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Text after" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Suffix, UpdateSourceTrigger=PropertyChanged, Delay=150}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Text="STYLE" Style="{StaticResource SectionTitle}" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Weight" Style="{StaticResource Label}" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Weights, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Weight}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Text align in box" Style="{StaticResource Label}" />
+                                            <ComboBox ItemsSource="{Binding DataContext.Aligns, RelativeSource={RelativeSource AncestorType=UserControl}}" SelectedItem="{Binding Align}" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <DockPanel Margin="0,12,0,4">
+                                        <TextBlock Text="{Binding Size, StringFormat={}{0} px}" DockPanel.Dock="Right" Foreground="{StaticResource Accent}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="13" />
+                                        <TextBlock Text="Size" Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <Slider Minimum="16" Maximum="400" Value="{Binding Size}" IsSnapToTickEnabled="True" TickFrequency="2" />
+
+                                    <TextBlock Text="Colour" Style="{StaticResource Label}" />
+                                    <DockPanel>
+                                        <Border Width="32" Height="32" CornerRadius="9" Background="{Binding ColorBrush}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,8,0" />
+                                        <TextBox Text="{Binding Color, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                    </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding DataContext.Swatches, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,10,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Width="22" Height="22" Padding="0" Margin="0,0,6,6" Background="{Binding}" BorderThickness="0" ToolTip="{Binding}"
+                                                        Command="{Binding DataContext.SetColorCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Ellipse Fill="{TemplateBinding Background}" Stroke="#33FFFFFF" StrokeThickness="1" />
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <CheckBox Content="Badge (gradient pill behind the text)" IsChecked="{Binding Badge}" Margin="0,8,0,0" />
+                                    <StackPanel Visibility="{Binding Badge, Converter={StaticResource Visible}}">
+                                        <Grid Margin="0,4,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="From" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding BadgeFrom, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="To" Style="{StaticResource Label}" />
+                                                <TextBox Text="{Binding BadgeTo, UpdateSourceTrigger=PropertyChanged, Delay=200}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding DataContext.BadgePresets, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,10,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Width="44" Height="20" Padding="0" Margin="0,0,6,6" BorderThickness="0"
+                                                            Command="{Binding DataContext.SetBadgePresetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"
+                                                            Background="{Binding Converter={x:Static vm:BadgePresetBrush.Instance}}">
+                                                        <Button.Template>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="{TemplateBinding Background}" CornerRadius="10" />
+                                                            </ControlTemplate>
+                                                        </Button.Template>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <CheckBox Content="Locked" IsChecked="{Binding Locked}" DockPanel.Dock="Right" />
+                                        <TextBlock Text="POSITION" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                                    </DockPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition />
+                                            <ColumnDefinition Width="8" />
+                                            <ColumnDefinition />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="X" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding X, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Y" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Y, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="Width" Style="{StaticResource Label}" />
+                                            <TextBox Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
