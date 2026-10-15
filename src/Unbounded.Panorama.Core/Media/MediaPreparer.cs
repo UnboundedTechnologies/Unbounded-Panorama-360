@@ -96,6 +96,56 @@ public sealed class MediaPreparer
         await RunFfmpegAsync(args, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Displayed size of the first video stream (width corrected for non-square pixels).</summary>
+    public static async Task<(int Width, int Height)> ProbeSizeAsync(string file, CancellationToken cancellationToken)
+    {
+        var psi = new ProcessStartInfo(Tools.FfprobePath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in new[] { "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,sample_aspect_ratio", "-of", "default=nw=1", file })
+            psi.ArgumentList.Add(a);
+        using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start ffprobe.");
+        var text = await p.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        await p.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+        int width = 0, height = 0;
+        double sar = 1;
+        foreach (var line in text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var (key, value) = (line.Split('=')[0], line[(line.IndexOf('=') + 1)..]);
+            switch (key)
+            {
+                case "width": int.TryParse(value, CultureInfo.InvariantCulture, out width); break;
+                case "height": int.TryParse(value, CultureInfo.InvariantCulture, out height); break;
+                case "sample_aspect_ratio":
+                    var parts = value.Split(':');
+                    if (parts.Length == 2 && double.TryParse(parts[0], CultureInfo.InvariantCulture, out var n)
+                        && double.TryParse(parts[1], CultureInfo.InvariantCulture, out var d) && n > 0 && d > 0)
+                        sar = n / d;
+                    break;
+            }
+        }
+        if (width <= 0 || height <= 0)
+            throw new InvalidOperationException("Could not read the size of this file.");
+        return ((int)Math.Max(1, Math.Round(width * sar)), height);
+    }
+
+    /// <summary>Still of the source at its own shape (square pixels, at most 2240 wide) for the live editor preview.</summary>
+    public static async Task RenderSourceFrameAsync(string source, double atSeconds, string pngPath, CancellationToken cancellationToken)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error", "-y" };
+        if (!IsImage(source))
+            args.AddRange(["-ss", Seconds(Math.Max(0, atSeconds))]);
+        args.AddRange(["-i", source, "-frames:v", "1",
+            "-vf", "scale='if(lte(sar,0),iw,max(1,round(iw*sar)))':ih,setsar=1,scale='min(2240,iw)':-2",
+            "-update", "1", pngPath]);
+        await RunFfmpegAsync(args, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Small upright thumbnail of any media file (library cards).</summary>
     public static async Task RenderThumbnailAsync(string source, double atSeconds, string jpgPath, CancellationToken cancellationToken)
     {
@@ -159,12 +209,14 @@ public sealed class MediaPreparer
         ? (ScreenLayout.PanelHeight, ScreenLayout.PanelWidth)
         : (ScreenLayout.PanelWidth, ScreenLayout.PanelHeight);
 
-    /// <summary>Scales and crops/pads the source to the editor canvas (1080×2240 or 2240×1080).</summary>
+    /// <summary>Scales and places the source on the editor canvas (1080×2240 or 2240×1080).</summary>
     public static string CanvasFilter(BackgroundMedia media, Orientation orientation)
     {
         var (w, h) = CanvasSize(orientation);
         // Square pixels first, so anamorphic sources keep their shape.
         var sar = "scale='if(lte(sar,0),iw,max(1,round(iw*sar)))':ih,setsar=1";
+        if (media.HasPlacement)
+            return PlacementFilter(media, orientation, sar);
         if (media.Fit == BackgroundFit.Fit)
             return $"{sar},scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1";
 
@@ -172,6 +224,35 @@ public sealed class MediaPreparer
         var cy = Math.Clamp(media.CropY, 0, 1).ToString("0.####", CultureInfo.InvariantCulture);
         return $"{sar},scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}:(iw-{w})*{cx}:(ih-{h})*{cy},setsar=1";
     }
+
+    /// <summary>
+    /// Exact placement: scale the source to the media rectangle, keep only the part inside the
+    /// chosen area, and pad that onto a black canvas at its position. Works for media that is
+    /// larger than the screen or partly off it. Values are rounded to even pixels (yuv420p).
+    /// </summary>
+    public static string PlacementFilter(BackgroundMedia media, Orientation orientation, string squarePixels)
+    {
+        var (w, h) = CanvasSize(orientation);
+        var area = Placement.AreaBox(media.Area, orientation);
+        var mw = Even(media.MediaWidth!.Value);
+        var mh = Even(media.MediaHeight);
+        var mx = Even(media.MediaX!.Value);
+        var my = Even(media.MediaY!.Value);
+        var visible = Placement.Visible(new Box(mx, my, mw, mh), area);
+        if (visible is not { } v)
+            return $"{squarePixels},scale=2:2,crop=2:2:0:0,pad={w}:{h}:0:0:color=black,setsar=1"; // nothing visible: black
+
+        var vx = Even(v.X);
+        var vy = Even(v.Y);
+        var vw = Math.Max(2, Even(v.Right) - vx);
+        var vh = Math.Max(2, Even(v.Bottom) - vy);
+        vw = Math.Min(vw, mw - Math.Max(0, vx - mx));
+        vh = Math.Min(vh, mh - Math.Max(0, vy - my));
+        return string.Create(CultureInfo.InvariantCulture,
+            $"{squarePixels},scale={mw}:{mh},setsar=1,crop={vw}:{vh}:{vx - mx}:{vy - my},pad={w}:{h}:{vx}:{vy}:color=black,setsar=1");
+    }
+
+    private static int Even(double value) => (int)Math.Round(value / 2) * 2;
 
     private static string CacheKey(BackgroundMedia media, Orientation orientation, string? overlayPng)
     {
@@ -181,7 +262,8 @@ public sealed class MediaPreparer
             var info = new FileInfo(source);
             parts.AddRange([Path.GetFullPath(source), info.Length, info.LastWriteTimeUtc.Ticks,
                 media.Fit, Seconds(media.CropX), Seconds(media.CropY), Seconds(media.StartSeconds),
-                media.DurationSeconds is { } d ? Seconds(d) : "all"]);
+                media.DurationSeconds is { } d ? Seconds(d) : "all",
+                media.HasPlacement ? PlacementFilter(media, orientation, "") : "legacy"]);
         }
         else
         {

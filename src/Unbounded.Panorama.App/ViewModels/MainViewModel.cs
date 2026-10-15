@@ -106,6 +106,59 @@ public sealed partial class MainViewModel : ObservableObject
     // Background from the cooler's own storage
     [ObservableProperty] public partial string? BackgroundDeviceFile { get; set; }
 
+    // Exact background placement (cooler pixels on the canvas)
+    [ObservableProperty] public partial int SourceWidth { get; set; }
+    [ObservableProperty] public partial int SourceHeight { get; set; }
+    [ObservableProperty] public partial double? MediaX { get; set; }
+    [ObservableProperty] public partial double? MediaY { get; set; }
+    [ObservableProperty] public partial double? MediaWidth { get; set; }
+    [ObservableProperty] public partial ScreenArea Area { get; set; } = ScreenArea.Whole;
+    [ObservableProperty] public partial ImageSource? SourceFrame { get; set; }
+    private string _sourceFrameKey = "";
+
+    public bool HasPlacement => HasBackground && BackgroundDeviceFile is null && MediaX is not null && MediaY is not null && MediaWidth is > 0 && SourceWidth > 0 && SourceHeight > 0;
+    public double MediaHeight => SourceWidth > 0 ? (MediaWidth ?? 0) * SourceHeight / SourceWidth : 0;
+    public System.Windows.Rect AreaRect { get { var a = Placement.AreaBox(Area, Orientation); return new System.Windows.Rect(a.X, a.Y, a.W, a.H); } }
+    public IReadOnlyList<ScreenArea> AreaChoices { get; } = Enum.GetValues<ScreenArea>();
+
+    /// <summary>Zoom relative to "fill the area" (100 % = exactly covers it).</summary>
+    public double ZoomPercent
+    {
+        get
+        {
+            if (!HasPlacement)
+                return 100;
+            var fill = Placement.Fill(Placement.AreaBox(Area, Orientation), SourceWidth, SourceHeight);
+            return Math.Round(MediaWidth!.Value / fill.W * 100, 1);
+        }
+        set
+        {
+            if (!HasPlacement || value <= 0)
+                return;
+            var fill = Placement.Fill(Placement.AreaBox(Area, Orientation), SourceWidth, SourceHeight);
+            ResizeMedia(fill.W * Math.Clamp(value, 5, 800) / 100);
+        }
+    }
+
+    /// <summary>Whole-pixel views of the placement for the number boxes.</summary>
+    public int MediaXPx { get => (int)Math.Round(MediaX ?? 0); set { if (HasPlacement) MediaX = value; } }
+    public int MediaYPx { get => (int)Math.Round(MediaY ?? 0); set { if (HasPlacement) MediaY = value; } }
+    public int MediaWidthPx { get => (int)Math.Round(MediaWidth ?? 0); set { if (HasPlacement && value > 0) ResizeMedia(value, keepCenter: false); } }
+    public int MediaHeightPx
+    {
+        get => (int)Math.Round(MediaHeight);
+        set { if (HasPlacement && value > 0) ResizeMedia(value * (double)SourceWidth / SourceHeight, keepCenter: false); }
+    }
+
+    public bool IsAreaWhole { get => Area == ScreenArea.Whole; set { if (value) SetArea(ScreenArea.Whole); } }
+    public bool IsAreaTop { get => Area == ScreenArea.TopFace; set { if (value) SetArea(ScreenArea.TopFace); } }
+    public bool IsAreaFront { get => Area == ScreenArea.FrontFace; set { if (value) SetArea(ScreenArea.FrontFace); } }
+    public bool IsBackgroundMode => EditorMode == "Background";
+
+    /// <summary>True when the media's centre sits exactly on the area's centre (for the "centred" badges).</summary>
+    public bool IsCenteredH => HasPlacement && Math.Abs(MediaX!.Value + MediaWidth!.Value / 2 - (AreaRect.X + AreaRect.Width / 2)) < 0.5;
+    public bool IsCenteredV => HasPlacement && Math.Abs(MediaY!.Value + MediaHeight / 2 - (AreaRect.Y + AreaRect.Height / 2)) < 0.5;
+
     // Drawing
     [ObservableProperty] public partial string? Drawing { get; set; }
     [ObservableProperty] public partial string EditorMode { get; set; } = "Select";
@@ -192,6 +245,12 @@ public sealed partial class MainViewModel : ObservableObject
             StartSeconds = StartSeconds,
             DurationSeconds = DurationSeconds,
             DeviceFile = BackgroundDeviceFile,
+            SourceWidth = SourceWidth,
+            SourceHeight = SourceHeight,
+            MediaX = MediaX,
+            MediaY = MediaY,
+            MediaWidth = MediaWidth,
+            Area = Area,
         },
         Widgets = Widgets.Select(w => w.ToModel()).ToList(),
         Drawing = Drawing,
@@ -213,6 +272,12 @@ public sealed partial class MainViewModel : ObservableObject
             StartSeconds = layout.Background.StartSeconds;
             DurationSeconds = layout.Background.DurationSeconds;
             BackgroundDeviceFile = layout.Background.DeviceFile;
+            SourceWidth = layout.Background.SourceWidth;
+            SourceHeight = layout.Background.SourceHeight;
+            MediaX = layout.Background.MediaX;
+            MediaY = layout.Background.MediaY;
+            MediaWidth = layout.Background.MediaWidth;
+            Area = layout.Background.Area;
             if (Drawing != layout.Drawing)
             {
                 Drawing = layout.Drawing;
@@ -236,11 +301,217 @@ public sealed partial class MainViewModel : ObservableObject
         }
         NotifyCounts();
         RefreshPreviews();
+        NotifyPlacement();
         var key = BackgroundKey();
         if (key != _backgroundKey)
         {
             _backgroundKey = key;
             _ = RenderBackgroundPreviewAsync();
+        }
+        _ = EnsurePlacementAsync();
+    }
+
+    // ================================================================== placement
+
+    private void NotifyPlacement()
+    {
+        foreach (var name in new[]
+        {
+            nameof(HasPlacement), nameof(MediaHeight), nameof(AreaRect), nameof(ZoomPercent), nameof(MediaXPx), nameof(MediaYPx),
+            nameof(MediaWidthPx), nameof(MediaHeightPx), nameof(IsCenteredH), nameof(IsCenteredV),
+            nameof(IsAreaWhole), nameof(IsAreaTop), nameof(IsAreaFront),
+        })
+            OnPropertyChanged(name);
+    }
+
+    partial void OnMediaXChanged(double? value) => PlacementEdited();
+    partial void OnMediaYChanged(double? value) => PlacementEdited();
+    partial void OnMediaWidthChanged(double? value) => PlacementEdited();
+    partial void OnSourceWidthChanged(int value) => NotifyPlacement();
+    partial void OnSourceHeightChanged(int value) => NotifyPlacement();
+
+    partial void OnAreaChanged(ScreenArea value)
+    {
+        NotifyPlacement();
+        if (_loading)
+            return;
+        // Choosing an area fills it, so "show it only on the top face" is one click.
+        FillArea();
+    }
+
+    private void PlacementEdited()
+    {
+        NotifyPlacement();
+        if (_loading)
+            return;
+        BackgroundDirty = true;
+        OnLayoutChanged(needsConfig: false);
+    }
+
+    private void SetPlacement(Box r)
+    {
+        _loading = true;
+        try
+        {
+            MediaX = r.X;
+            MediaY = r.Y;
+            MediaWidth = r.W;
+        }
+        finally
+        {
+            _loading = false;
+        }
+        PlacementEdited();
+    }
+
+    /// <summary>Resizes keeping the shape; by default around the current centre.</summary>
+    private void ResizeMedia(double width, bool keepCenter = true)
+    {
+        if (!HasPlacement)
+            return;
+        width = Math.Max(16, width);
+        var height = width * SourceHeight / SourceWidth;
+        var cx = MediaX!.Value + MediaWidth!.Value / 2;
+        var cy = MediaY!.Value + MediaHeight / 2;
+        SetPlacement(keepCenter
+            ? new Box(cx - width / 2, cy - height / 2, width, height)
+            : new Box(MediaX.Value, MediaY.Value, width, height));
+    }
+
+    /// <summary>Zooms around a point on the canvas (mouse wheel in background mode).</summary>
+    public void ZoomMediaAt(double factor, double px, double py)
+    {
+        if (!HasPlacement)
+            return;
+        var w = Math.Max(16, MediaWidth!.Value * factor);
+        var f = w / MediaWidth.Value;
+        SetPlacement(new Box(px - (px - MediaX!.Value) * f, py - (py - MediaY!.Value) * f, w, w * SourceHeight / SourceWidth));
+    }
+
+    public void MoveMediaTo(double x, double y)
+    {
+        if (!HasPlacement)
+            return;
+        SetPlacement(new Box(x, y, MediaWidth!.Value, MediaHeight));
+    }
+
+    public Box MediaBox => new(MediaX ?? 0, MediaY ?? 0, MediaWidth ?? 0, MediaHeight);
+    public Box AreaBox => Placement.AreaBox(Area, Orientation);
+
+    [RelayCommand]
+    private void FillArea()
+    {
+        if (SourceWidth > 0 && SourceHeight > 0)
+            SetPlacement(Placement.Fill(AreaBox, SourceWidth, SourceHeight));
+    }
+
+    [RelayCommand]
+    private void FitArea()
+    {
+        if (SourceWidth > 0 && SourceHeight > 0)
+            SetPlacement(Placement.Fit(AreaBox, SourceWidth, SourceHeight));
+    }
+
+    [RelayCommand]
+    private void CenterMedia(string axis)
+    {
+        if (!HasPlacement)
+            return;
+        var a = AreaBox;
+        SetPlacement(new Box(
+            axis is "H" or "Both" ? a.X + (a.W - MediaWidth!.Value) / 2 : MediaX!.Value,
+            axis is "V" or "Both" ? a.Y + (a.H - MediaHeight) / 2 : MediaY!.Value,
+            MediaWidth!.Value, MediaHeight));
+    }
+
+    [RelayCommand]
+    private void SetArea(ScreenArea area)
+    {
+        if (Area == area)
+            FillArea();
+        else
+            Area = area;
+    }
+
+    [RelayCommand]
+    private void NudgeMedia(string direction)
+    {
+        if (!HasPlacement)
+            return;
+        var (dx, dy) = direction switch { "L" => (-1, 0), "R" => (1, 0), "U" => (0, -1), _ => (0, 1) };
+        MoveMediaTo(MediaX!.Value + dx, MediaY!.Value + dy);
+    }
+
+    /// <summary>
+    /// Makes sure the current background has its size measured, a placement (older layouts are
+    /// converted from Fit/Crop exactly), and a still for the live preview.
+    /// </summary>
+    private async Task EnsurePlacementAsync()
+    {
+        var path = BackgroundPath;
+        if (path is null || BackgroundDeviceFile is not null || !File.Exists(path))
+        {
+            SourceFrame = null;
+            _sourceFrameKey = "";
+            return;
+        }
+        try
+        {
+            if (SourceWidth <= 0 || SourceHeight <= 0)
+            {
+                var (w, h) = await Task.Run(() => MediaPreparer.ProbeSizeAsync(path, CancellationToken.None));
+                if (path != BackgroundPath)
+                    return;
+                _loading = true;
+                try
+                {
+                    SourceWidth = w;
+                    SourceHeight = h;
+                }
+                finally
+                {
+                    _loading = false;
+                }
+            }
+            if (MediaX is null || MediaY is null || MediaWidth is not > 0)
+            {
+                // Convert the old Fill/Fit + crop sliders into the same placement.
+                var area = AreaBox;
+                var r = BackgroundFit == BackgroundFit.Fit
+                    ? Placement.Fit(area, SourceWidth, SourceHeight)
+                    : Placement.Fill(area, SourceWidth, SourceHeight);
+                if (BackgroundFit == BackgroundFit.Fill)
+                    r = r with { X = area.X - (r.W - area.W) * CropX, Y = area.Y - (r.H - area.H) * CropY };
+                _loading = true;
+                try
+                {
+                    MediaX = r.X;
+                    MediaY = r.Y;
+                    MediaWidth = r.W;
+                }
+                finally
+                {
+                    _loading = false;
+                }
+                NotifyPlacement();
+                Commit();
+            }
+
+            var frameKey = $"{path}|{StartSeconds}";
+            if (frameKey != _sourceFrameKey)
+            {
+                _sourceFrameKey = frameKey;
+                var png = Path.Combine(_storage.PreviewDir, $"source-{Guid.NewGuid():N}.png");
+                var start = StartSeconds + 0.5;
+                await Task.Run(() => MediaPreparer.RenderSourceFrameAsync(path, start, png, CancellationToken.None));
+                if (frameKey == _sourceFrameKey)
+                    SourceFrame = LoadImage(png);
+                try { File.Delete(png); } catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = "Could not read the background: " + ex.Message;
         }
     }
 
@@ -343,6 +614,19 @@ public sealed partial class MainViewModel : ObservableObject
         BackgroundDirty = true;
         _backgroundKey = BackgroundKey();
         _ = RenderBackgroundPreviewAsync();
+        // The canvas changed shape: faces only exist in portrait; refill the area in the new canvas.
+        _loading = true;
+        try
+        {
+            if (value != LayoutOrientation.Portrait)
+                Area = ScreenArea.Whole;
+        }
+        finally
+        {
+            _loading = false;
+        }
+        NotifyPlacement();
+        FillArea();
         OnLayoutChanged(needsConfig: true);
     }
 
@@ -373,7 +657,8 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnEditorModeChanged(string value)
     {
         OnPropertyChanged(nameof(IsDrawMode));
-        if (value == "Draw")
+        OnPropertyChanged(nameof(IsBackgroundMode));
+        if (value is "Draw" or "Background")
             ClearSelection();
     }
 
@@ -403,6 +688,8 @@ public sealed partial class MainViewModel : ObservableObject
             _backgroundKey = key;
             _ = RenderBackgroundPreviewAsync();
         }
+        NotifyPlacement();
+        _ = EnsurePlacementAsync();
     }
 
     partial void OnStartWithWindowsChanged(bool value)
@@ -990,6 +1277,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             BackgroundDeviceFile = null;
+            ResetPlacement();
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = 0;
@@ -1014,7 +1302,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             BackgroundDeviceFile = null;
-            BackgroundFit = BackgroundFit.Fill;
+            ResetPlacement();
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = Math.Round(clip.OffsetSeconds, 3);
@@ -1027,7 +1315,20 @@ public sealed partial class MainViewModel : ObservableObject
         BackgroundPath = clip.FilePath;
         _library.Remember(LibraryKind.YouTube, clip.FilePath, title, StartSeconds, DurationSeconds);
         ReloadLibrary();
-        Status = $"Imported “{title}”. Drag the framing sliders to choose the part that fills the screen, then Apply.";
+        Status = $"Imported “{title}”. It fills the screen; adjust it under Background or in BACKGROUND mode, then Apply.";
+    }
+
+    /// <summary>A new source is measured again and starts as "fill the current area", centred.</summary>
+    private void ResetPlacement()
+    {
+        SourceWidth = 0;
+        SourceHeight = 0;
+        MediaX = null;
+        MediaY = null;
+        MediaWidth = null;
+        BackgroundFit = BackgroundFit.Fill;
+        SourceFrame = null;
+        _sourceFrameKey = "";
     }
 
     [RelayCommand]
@@ -1094,7 +1395,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             BackgroundDeviceFile = null;
-            BackgroundFit = BackgroundFit.Fill;
+            ResetPlacement();
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = e.StartSeconds;

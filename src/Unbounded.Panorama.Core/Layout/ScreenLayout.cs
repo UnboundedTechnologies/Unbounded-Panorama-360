@@ -106,9 +106,92 @@ public sealed class BackgroundMedia
     /// </summary>
     public string? DeviceFile { get; set; }
 
+    /// <summary>Displayed size of the source (square pixels), measured when the file is chosen.</summary>
+    public int SourceWidth { get; set; }
+    public int SourceHeight { get; set; }
+
+    /// <summary>
+    /// Exact placement of the media on the canvas, in cooler pixels: top-left corner and width
+    /// (height follows the source's shape). Null means "not placed yet" (older layouts use Fit/Crop).
+    /// </summary>
+    public double? MediaX { get; set; }
+    public double? MediaY { get; set; }
+    public double? MediaWidth { get; set; }
+
+    /// <summary>The part of the screen the media is shown in; outside it the screen stays black.</summary>
+    public ScreenArea Area { get; set; } = ScreenArea.Whole;
+
+    [JsonIgnore]
+    public bool HasPlacement => MediaX is not null && MediaY is not null && MediaWidth is > 0 && SourceWidth > 0 && SourceHeight > 0;
+
+    [JsonIgnore]
+    public double MediaHeight => SourceWidth > 0 ? (MediaWidth ?? 0) * SourceHeight / SourceWidth : 0;
+
     /// <summary>Transparent PNG (canvas size) drawn over the background. Set at apply time, not saved.</summary>
     [JsonIgnore]
     public string? OverlayPath { get; set; }
+}
+
+public enum ScreenArea
+{
+    /// <summary>The whole screen.</summary>
+    Whole,
+
+    /// <summary>Portrait only: the flat face above the bend.</summary>
+    TopFace,
+
+    /// <summary>Portrait only: the curved face below the bend.</summary>
+    FrontFace,
+}
+
+/// <summary>Placement geometry shared by the editor preview and the ffmpeg conversion.</summary>
+public static class Placement
+{
+    /// <summary>
+    /// Where the screen bends from the flat top onto the curved front, in portrait canvas pixels.
+    /// Measured on the cooler: text at y≈1100 sat on the bend.
+    /// </summary>
+    public const int BendY = 1100;
+
+    public static Box AreaBox(ScreenArea area, Orientation orientation)
+    {
+        var (w, h) = orientation == Orientation.Portrait ? (ScreenLayout.PanelHeight, ScreenLayout.PanelWidth) : (ScreenLayout.PanelWidth, ScreenLayout.PanelHeight);
+        if (orientation != Orientation.Portrait)
+            return new Box(0, 0, w, h);
+        return area switch
+        {
+            ScreenArea.TopFace => new Box(0, 0, w, BendY),
+            ScreenArea.FrontFace => new Box(0, BendY, w, h - BendY),
+            _ => new Box(0, 0, w, h),
+        };
+    }
+
+    /// <summary>Media rectangle that covers the area (cropping the overflow), centred.</summary>
+    public static Box Fill(Box area, int sourceW, int sourceH)
+    {
+        var scale = Math.Max(area.W / sourceW, area.H / sourceH);
+        return Centered(area, sourceW * scale, sourceH * scale);
+    }
+
+    /// <summary>Media rectangle that fits entirely inside the area, centred.</summary>
+    public static Box Fit(Box area, int sourceW, int sourceH)
+    {
+        var scale = Math.Min(area.W / sourceW, area.H / sourceH);
+        return Centered(area, sourceW * scale, sourceH * scale);
+    }
+
+    public static Box Centered(Box area, double w, double h) =>
+        new(area.X + (area.W - w) / 2, area.Y + (area.H - h) / 2, w, h);
+
+    /// <summary>The part of the media that is actually visible (inside the area), or null.</summary>
+    public static Box? Visible(Box media, Box area)
+    {
+        var x1 = Math.Max(media.X, area.X);
+        var y1 = Math.Max(media.Y, area.Y);
+        var x2 = Math.Min(media.Right, area.Right);
+        var y2 = Math.Min(media.Bottom, area.Bottom);
+        return x2 - x1 >= 1 && y2 - y1 >= 1 ? new Box(x1, y1, x2 - x1, y2 - y1) : null;
+    }
 }
 
 public sealed class ScreenLayout

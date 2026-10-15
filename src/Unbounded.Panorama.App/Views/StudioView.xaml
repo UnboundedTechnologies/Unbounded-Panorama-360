@@ -83,12 +83,87 @@
                         </WrapPanel>
                         <TextBlock Text="Drop an image, GIF or video file anywhere on the window, or press Ctrl+V with a copied YouTube link or file."
                                    Foreground="{StaticResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+                        <!-- Exact placement -->
+                        <StackPanel Visibility="{Binding HasPlacement, Converter={StaticResource Visible}}">
+                            <StackPanel Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
+                                <TextBlock Text="Show it on" Style="{StaticResource Label}" />
+                                <Border Background="{StaticResource Field}" CornerRadius="10" HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Style="{StaticResource Segment}" GroupName="area" IsChecked="{Binding IsAreaWhole}" Padding="10,4"
+                                                     ToolTip="The whole screen">WHOLE</RadioButton>
+                                        <RadioButton Style="{StaticResource Segment}" GroupName="area" IsChecked="{Binding IsAreaTop}" Padding="10,4"
+                                                     ToolTip="Only the flat face above the bend">TOP FACE</RadioButton>
+                                        <RadioButton Style="{StaticResource Segment}" GroupName="area" IsChecked="{Binding IsAreaFront}" Padding="10,4"
+                                                     ToolTip="Only the curved face below the bend">FRONT FACE</RadioButton>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="Fill area" Style="{StaticResource Chip}" Command="{Binding FillAreaCommand}" ToolTip="Cover the area completely (edges may be cropped), centred" />
+                                <Button Content="Fit area" Style="{StaticResource Chip}" Command="{Binding FitAreaCommand}" ToolTip="Show the whole image or video inside the area, centred" />
+                                <Button Style="{StaticResource Chip}" Command="{Binding CenterMediaCommand}" CommandParameter="H" ToolTip="Centre horizontally in the area">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignCenterH}" Margin="0,0,6,0" />
+                                        <TextBlock Text="Centre" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource Chip}" Command="{Binding CenterMediaCommand}" CommandParameter="V" ToolTip="Centre vertically in the area">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignMiddle}" Margin="0,0,6,0" />
+                                        <TextBlock Text="Centre" />
+                                    </StackPanel>
+                                </Button>
+                            </WrapPanel>
+
+                            <DockPanel Margin="0,8,0,4">
+                                <TextBox Width="70" DockPanel.Dock="Right" Text="{Binding ZoomPercent, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.#}}"
+                                         ToolTip="Zoom in percent; 100 = exactly fills the area" />
+                                <TextBlock Text="Zoom %  (100 = fills the area)" Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <Slider Minimum="10" Maximum="400" Value="{Binding ZoomPercent, Delay=120}" SmallChange="1" LargeChange="10" />
+
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="X (px from left)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding MediaXPx, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Y (px from top)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding MediaYPx, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1">
+                                    <TextBlock Text="Width (px)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding MediaWidthPx, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2">
+                                    <TextBlock Text="Height (px)" Style="{StaticResource Label}" />
+                                    <TextBox Text="{Binding MediaHeightPx, UpdateSourceTrigger=LostFocus}" />
+                                </StackPanel>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Border CornerRadius="8" Padding="7,2" Margin="0,0,6,0" BorderThickness="1"
+                                        BorderBrush="#663DDC97" Background="#1A3DDC97" Visibility="{Binding IsCenteredH, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="CENTRED ↔" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="#3DDC97" />
+                                </Border>
+                                <Border CornerRadius="8" Padding="7,2" BorderThickness="1"
+                                        BorderBrush="#663DDC97" Background="#1A3DDC97" Visibility="{Binding IsCenteredV, Converter={StaticResource Visible}}">
+                                    <TextBlock Text="CENTRED ↕" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="#3DDC97" />
+                                </Border>
+                            </StackPanel>
+                            <Button Content="Move &amp; zoom on the canvas" Style="{StaticResource Chip}" Margin="0,10,0,0" HorizontalAlignment="Left" Click="OnBackgroundMode"
+                                    ToolTip="Drag the background, mouse wheel to zoom (Shift = fine), arrows to nudge; it snaps to the centre and edges of the area" />
+                        </StackPanel>
+
                         <StackPanel Visibility="{Binding HasBackground, Converter={StaticResource Visible}}">
-                            <TextBlock Text="Sizing" Style="{StaticResource Label}" />
-                            <ComboBox ItemsSource="{Binding Fits}" SelectedItem="{Binding BackgroundFit}" ItemTemplate="{StaticResource EnumItem}" />
-                            <TextBlock Text="Framing: horizontal / vertical" Style="{StaticResource Label}" />
-                            <Slider Minimum="0" Maximum="1" Value="{Binding CropX, Delay=300}" ToolTip="Which part of a wide source fills the screen" />
-                            <Slider Minimum="0" Maximum="1" Value="{Binding CropY, Delay=300}" Margin="0,6,0,0" />
                             <Grid Margin="0,4,0,0" Visibility="{Binding IsVideoBackground, Converter={StaticResource Visible}}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition />
@@ -187,6 +262,7 @@
                     <Border Background="{StaticResource Field}" CornerRadius="10">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Select" x:Name="SelectMode" ToolTip="Move and edit widgets">SELECT</RadioButton>
+                            <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Background" x:Name="BackgroundMode" ToolTip="Move and zoom the background image or video">BACKGROUND</RadioButton>
                             <RadioButton Style="{StaticResource Segment}" GroupName="mode" Checked="OnModeChecked" Tag="Draw" x:Name="DrawMode" ToolTip="Draw freely on the screen">DRAW</RadioButton>
                         </StackPanel>
                     </Border>
@@ -199,8 +275,26 @@
                     </Border>
                     <Border Style="{StaticResource Sep}" />
 
+                    <!-- Background tools -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}">
+                        <Button Content="Fill area" Style="{StaticResource Chip}" Margin="2,0" Command="{Binding FillAreaCommand}" />
+                        <Button Content="Fit area" Style="{StaticResource Chip}" Margin="2,0" Command="{Binding FitAreaCommand}" />
+                        <Button Style="{StaticResource Tool}" Command="{Binding CenterMediaCommand}" CommandParameter="H" ToolTip="Centre horizontally in the area">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignCenterH}" />
+                        </Button>
+                        <Button Style="{StaticResource Tool}" Command="{Binding CenterMediaCommand}" CommandParameter="V" ToolTip="Centre vertically in the area">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignMiddle}" />
+                        </Button>
+                        <TextBlock VerticalAlignment="Center" Margin="8,0,4,0" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource Accent}">
+                            <Run Text="{Binding ZoomPercent, Mode=OneWay, StringFormat={}{0:0.#}}" /><Run Text=" %" />
+                        </TextBlock>
+                        <ToggleButton Style="{StaticResource ToolToggle}" IsChecked="{Binding SnapEnabled}" ToolTip="Magnet: snap to the centre and edges of the area (hold Alt to move freely)">
+                            <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoMagnet}" />
+                        </ToggleButton>
+                    </StackPanel>
+
                     <!-- Select tools -->
-                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsDrawMode, Converter={StaticResource Hidden}}">
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Select}">
                         <Button Style="{StaticResource Tool}" Command="{Binding AlignCommand}" CommandParameter="{x:Static vm:AlignMode.Left}" ToolTip="Align left (to the screen, or to each other when several are selected)">
                             <Path Style="{StaticResource IconPath}" Data="{StaticResource IcoAlignLeft}" />
                         </Button>
@@ -318,7 +412,17 @@
                         <Border CornerRadius="58" ClipToBounds="True" BorderBrush="#6600E5FF" BorderThickness="3">
                             <Grid x:Name="Screen" Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" Background="Black" ClipToBounds="True"
                                   MouseLeftButtonDown="OnScreenMouseDown" MouseMove="OnScreenMouseMove" MouseLeftButtonUp="OnScreenMouseUp" Focusable="True">
-                                <Image Source="{Binding BackgroundPreview}" Stretch="Fill" IsHitTestVisible="False" />
+                                <!-- Background: exact placement (live), or the full-screen still for cooler files / older layouts -->
+                                <Image Source="{Binding BackgroundPreview}" Stretch="Fill" IsHitTestVisible="False"
+                                       Visibility="{Binding HasPlacement, Converter={StaticResource Hidden}}" />
+                                <Canvas IsHitTestVisible="False" Visibility="{Binding HasPlacement, Converter={StaticResource Visible}}">
+                                    <Canvas.Clip>
+                                        <RectangleGeometry Rect="{Binding AreaRect}" />
+                                    </Canvas.Clip>
+                                    <Image Source="{Binding SourceFrame}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"
+                                           Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
+                                           Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}" />
+                                </Canvas>
 
                                 <Grid IsHitTestVisible="False" Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
                                     <Grid Visibility="{Binding ShowCurveGuide, Converter={StaticResource Visible}}">
@@ -331,7 +435,7 @@
                                 <InkCanvas x:Name="Ink" Background="Transparent" IsHitTestVisible="{Binding IsDrawMode}"
                                            Width="{Binding CanvasWidth}" Height="{Binding CanvasHeight}" />
 
-                                <ItemsControl ItemsSource="{Binding Widgets}" IsHitTestVisible="{Binding IsDrawMode, Converter={StaticResource Is}, ConverterParameter=False}">
+                                <ItemsControl ItemsSource="{Binding Widgets}" IsHitTestVisible="{Binding EditorMode, Converter={StaticResource Is}, ConverterParameter=Select}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <Canvas />
@@ -387,6 +491,18 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
+                                <!-- Background mode: area outline, full media frame, and the surface that takes drag / wheel -->
+                                <Canvas IsHitTestVisible="False" Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}">
+                                    <Rectangle Canvas.Left="{Binding AreaRect.X}" Canvas.Top="{Binding AreaRect.Y}" Width="{Binding AreaRect.Width}" Height="{Binding AreaRect.Height}"
+                                               Stroke="#AA3DDC97" StrokeThickness="4" StrokeDashArray="6 4" />
+                                    <Rectangle Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
+                                               Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}"
+                                               Stroke="#00E5FF" StrokeThickness="4" Fill="#0A00E5FF" />
+                                </Canvas>
+                                <Rectangle x:Name="BackgroundSurface" Fill="Transparent" Cursor="SizeAll"
+                                           Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}"
+                                           MouseLeftButtonDown="OnBgDown" MouseMove="OnBgMove" MouseLeftButtonUp="OnBgUp" MouseWheel="OnBgWheel" />
+
                                 <Canvas x:Name="GuideLayer" IsHitTestVisible="False" />
                                 <Canvas IsHitTestVisible="False">
                                     <Rectangle x:Name="Marquee" Visibility="Collapsed" Fill="#2200E5FF" Stroke="#00E5FF" StrokeThickness="3" StrokeDashArray="4 3" />
@@ -423,7 +539,23 @@
                 </Border>
             </StackPanel>
 
-            <Grid Visibility="{Binding IsDrawMode, Converter={StaticResource Hidden}}">
+            <!-- Background mode help -->
+            <StackPanel Margin="8,6,16,16" Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}">
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="BACKGROUND MODE" Style="{StaticResource SectionTitle}" />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Muted}" Margin="0,8,0,0"
+                                   Text="Drag to move the image or video. Mouse wheel zooms around the pointer (hold Shift for fine steps). Arrow keys nudge by 1 px, Shift + arrows by 10 px." />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Muted}" Margin="0,10,0,0"
+                                   Text="The magnet snaps it to the centre and edges of the area (pink lines show what it locked to). Hold Alt to move freely. The green dashed box is the area it is shown in; anything outside stays black." />
+                        <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="{StaticResource Muted}" Margin="0,10,0,0"
+                                   Text="Exact numbers (X, Y, width, height, zoom) and the area choice are in the Background card on the left." />
+                        <Button Content="Back to select" Style="{StaticResource Chip}" Margin="0,14,0,0" HorizontalAlignment="Left" Click="OnBackToSelect" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <Grid Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Select}">
                 <StackPanel Margin="8,6,16,16" Visibility="{Binding SelectedWidget, Converter={StaticResource Hidden}}">
                     <Border Style="{StaticResource Card}">
                         <StackPanel>

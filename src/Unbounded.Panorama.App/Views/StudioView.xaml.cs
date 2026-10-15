@@ -146,8 +146,16 @@ public partial class StudioView : UserControl
                 ApplyInkSettings();
                 break;
         }
-        if (e.PropertyName == nameof(MainViewModel.EditorMode) && Vm.EditorMode == "Select")
-            SelectMode.IsChecked = true;
+        if (e.PropertyName == nameof(MainViewModel.EditorMode))
+        {
+            // Keep the mode switch in step when the mode changes from elsewhere.
+            switch (Vm.EditorMode)
+            {
+                case "Select": SelectMode.IsChecked = true; break;
+                case "Background": BackgroundMode.IsChecked = true; break;
+                case "Draw": DrawMode.IsChecked = true; break;
+            }
+        }
     }
 
     private DrawingAttributes CurrentAttributes(bool freehand) => new()
@@ -293,6 +301,114 @@ public partial class StudioView : UserControl
         return (a.X + Math.Sign(b.X - a.X) * size, a.Y + Math.Sign(b.Y - a.Y) * size);
     }
 
+    // ================================================================== background placement
+
+    private bool _bgDragging;
+    private Point _bgStart;
+    private Box _bgStartBox;
+
+    private void OnBackgroundMode(object sender, RoutedEventArgs e) => BackgroundMode.IsChecked = true;
+
+    private void OnBgDown(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        Screen.Focus();
+        if (!Vm.HasPlacement)
+        {
+            Vm.Status = "Choose an image, GIF or video first (Background card on the left).";
+            return;
+        }
+        _bgDragging = true;
+        _bgStart = e.GetPosition(Screen);
+        _bgStartBox = Vm.MediaBox;
+        BackgroundSurface.CaptureMouse();
+    }
+
+    private void OnBgMove(object sender, MouseEventArgs e)
+    {
+        if (!_bgDragging)
+            return;
+        var p = e.GetPosition(Screen);
+        var x = _bgStartBox.X + (p.X - _bgStart.X);
+        var y = _bgStartBox.Y + (p.Y - _bgStart.Y);
+        var guides = new List<Guide>();
+        if (SnapActive)
+            (x, y) = SnapMedia(x, y, _bgStartBox.W, _bgStartBox.H, guides);
+        Vm.MoveMediaTo(Math.Round(x), Math.Round(y));
+        DrawGuides(guides);
+        ShowMediaInfo();
+    }
+
+    private void OnBgUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_bgDragging)
+            return;
+        _bgDragging = false;
+        BackgroundSurface.ReleaseMouseCapture();
+        GuideLayer.Children.Clear();
+        Vm.DragInfo = "";
+        Vm.CommitNow();
+    }
+
+    private void OnBgWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!Vm.HasPlacement)
+            return;
+        var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? 1.01 : 1.05;
+        var p = e.GetPosition(Screen);
+        Vm.ZoomMediaAt(e.Delta > 0 ? step : 1 / step, p.X, p.Y);
+        ShowMediaInfo();
+        e.Handled = true;
+    }
+
+    private void ShowMediaInfo()
+    {
+        var m = Vm.MediaBox;
+        var centred = (Vm.IsCenteredH ? "  centred ↔" : "") + (Vm.IsCenteredV ? "  centred ↕" : "");
+        Vm.DragInfo = $"X {m.X:0}  Y {m.Y:0}  W {m.W:0}  H {m.H:0}  {Vm.ZoomPercent:0.#} %{centred}";
+    }
+
+    /// <summary>Snaps the media's edges or centre to the area's edges or centre (and the screen centre).</summary>
+    private (double X, double Y) SnapMedia(double x, double y, double w, double h, List<Guide> guides)
+    {
+        var area = Vm.AreaBox;
+        var threshold = SnapThreshold;
+        double? bestX = null, bestY = null;
+        double lineX = 0, lineY = 0;
+
+        void TryX(double candidateX, double line)
+        {
+            if (Math.Abs(candidateX - x) <= threshold && (bestX is null || Math.Abs(candidateX - x) < Math.Abs(bestX.Value - x)))
+                (bestX, lineX) = (candidateX, line);
+        }
+        void TryY(double candidateY, double line)
+        {
+            if (Math.Abs(candidateY - y) <= threshold && (bestY is null || Math.Abs(candidateY - y) < Math.Abs(bestY.Value - y)))
+                (bestY, lineY) = (candidateY, line);
+        }
+
+        TryX(area.X + (area.W - w) / 2, area.CenterX);   // centred in the area
+        TryX(area.X, area.X);                           // left edges
+        TryX(area.Right - w, area.Right);               // right edges
+        TryX(Vm.CanvasWidth / 2.0 - w / 2, Vm.CanvasWidth / 2.0);
+        TryY(area.Y + (area.H - h) / 2, area.CenterY);
+        TryY(area.Y, area.Y);
+        TryY(area.Bottom - h, area.Bottom);
+        TryY(Vm.CanvasHeight / 2.0 - h / 2, Vm.CanvasHeight / 2.0);
+
+        if (bestX is { } bx)
+        {
+            x = bx;
+            guides.Add(new Guide(true, lineX, area.Y, area.Bottom, Math.Abs(lineX - area.CenterX) < 0.5 ? "centre" : null));
+        }
+        if (bestY is { } by)
+        {
+            y = by;
+            guides.Add(new Guide(false, lineY, area.X, area.Right, Math.Abs(lineY - area.CenterY) < 0.5 ? "centre" : null));
+        }
+        return (x, y);
+    }
+
     // ================================================================== selection + move
 
     private void OnWidgetMouseDown(object sender, MouseButtonEventArgs e)
@@ -319,7 +435,7 @@ public partial class StudioView : UserControl
 
     private void OnScreenMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (Vm.IsDrawMode)
+        if (Vm.EditorMode != "Select")
             return;
         Screen.Focus();
         if (!Additive)
@@ -490,6 +606,23 @@ public partial class StudioView : UserControl
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         if (Keyboard.FocusedElement is TextBox)
             return; // text boxes keep their own keys
+
+        if (Vm.IsBackgroundMode && Vm.HasPlacement && e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var step = shift ? 10 : 1;
+            var m = Vm.MediaBox;
+            var (dx, dy) = e.Key switch { Key.Left => (-step, 0), Key.Right => (step, 0), Key.Up => (0, -step), _ => (0, step) };
+            Vm.MoveMediaTo(Math.Round(m.X) + dx, Math.Round(m.Y) + dy);
+            ShowMediaInfo();
+            e.Handled = true;
+            return;
+        }
+        if (Vm.IsBackgroundMode && e.Key == Key.Escape)
+        {
+            SelectMode.IsChecked = true;
+            e.Handled = true;
+            return;
+        }
 
         switch (e.Key)
         {
