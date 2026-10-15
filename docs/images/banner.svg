@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#05070D"/>
+      <stop offset="1" stop-color="#0D1424"/>
+    </linearGradient>
+    <radialGradient id="glowC" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#00E5FF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#00E5FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowV" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00E5FF"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B3A8A"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E7490"/>
+      <stop offset="1" stop-color="#0B111E"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#A92F2C"/>
+      <stop offset="1" stop-color="#CB6236"/>
+    </linearGradient>
+    <clipPath id="screen"><rect x="944" y="58" width="152" height="316" rx="18"/></clipPath>
+  </defs>
+
+  <rect width="1280" height="420" fill="url(#bg)"/>
+  <circle cx="1020" cy="210" r="260" fill="url(#glowC)"/>
+  <circle cx="180" cy="120" r="220" fill="url(#glowV)"/>
+
+  <!-- Logo mark -->
+  <g transform="translate(76,116) scale(0.62)">
+    <rect x="40" y="8" width="176" height="240" rx="44" fill="url(#edge)"/>
+    <rect x="66" y="34" width="124" height="188" rx="26" fill="#05070D"/>
+    <rect x="88" y="104" width="80" height="16" rx="8" fill="#00E5FF"/>
+    <rect x="88" y="136" width="52" height="16" rx="8" fill="#8B5CF6"/>
+  </g>
+
+  <!-- Name and promise -->
+  <g font-family="Segoe UI, Helvetica Neue, Arial, sans-serif">
+    <text x="262" y="178" font-size="58" font-weight="800" fill="#EAF2FF" letter-spacing="1">UNBOUNDED</text>
+    <text x="262" y="240" font-size="58" font-weight="800" fill="#00E5FF" letter-spacing="1">PANORAMA 360</text>
+    <text x="264" y="290" font-size="25" fill="#BFC7D5">Anything. Anywhere. On your TRYX Panorama.</text>
+    <text x="264" y="330" font-size="18" fill="#8290AA">Free and open source  ·  Windows 10 / 11  ·  No KANALI limits</text>
+  </g>
+
+  <!-- The cooler: portrait screen, top face and front face with their own media -->
+  <rect x="930" y="44" width="180" height="344" rx="30" fill="#0A0E16" stroke="#5A6478" stroke-width="5"/>
+  <g clip-path="url(#screen)">
+    <rect x="944" y="58" width="152" height="150" fill="url(#top)"/>
+    <rect x="944" y="208" width="152" height="166" fill="url(#front)"/>
+    <circle cx="1060" cy="100" r="46" fill="#A78BFA" opacity="0.35"/>
+    <circle cx="975" cy="320" r="60" fill="#22D3EE" opacity="0.25"/>
+    <line x1="944" y1="208" x2="1096" y2="208" stroke="#00E5FF" stroke-width="2" stroke-dasharray="6 5" opacity="0.8"/>
+    <g font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" text-anchor="middle">
+      <text x="1020" y="118" font-size="40" font-weight="300" fill="#FFFFFF">21:47</text>
+      <text x="1020" y="142" font-size="12" fill="#E9D5FF">Thursday 15 October</text>
+      <rect x="966" y="236" width="108" height="34" rx="17" fill="url(#badge)"/>
+      <text x="1020" y="259" font-size="17" font-weight="700" fill="#FFFFFF">CPU 41°C</text>
+      <text x="1020" y="300" font-size="20" font-weight="600" fill="#76B900">GPU 36°C</text>
+      <text x="1020" y="330" font-size="14" fill="#BFC7D5">RAM 38 %</text>
+    </g>
+  </g>
+  <g font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="14" fill="#8290AA">
+    <text x="1128" y="134">top face</text>
+    <text x="1128" y="296">front face</text>
+  </g>
+  <line x1="1112" y1="130" x2="1124" y2="130" stroke="#8290AA" stroke-width="1.5"/>
+  <line x1="1112" y1="292" x2="1124" y2="292" stroke="#8290AA" stroke-width="1.5"/>
+</svg>

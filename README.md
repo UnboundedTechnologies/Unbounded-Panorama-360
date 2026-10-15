@@ -1,52 +1,123 @@
-# Unbounded Panorama 360
+<p align="center">
+  <img src="docs/images/banner.svg" alt="Unbounded Panorama 360: anything, anywhere, on your TRYX Panorama" width="100%">
+</p>
 
-A Windows app for TRYX Panorama coolers (curved 2240 × 1080 AMOLED). Put anything anywhere on the screen, in landscape or portrait: live hardware values (CPU/GPU temperature, load, clocks), clock, custom text, images and video.
+<p align="center">
+  <a href="https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/UnboundedTechnologies/Unbounded-Panorama-360?label=download&color=00E5FF&style=for-the-badge"></a>
+  <img alt="Open source" src="https://img.shields.io/badge/open%20source-free%20forever-8B5CF6?style=for-the-badge">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-3DDC97?style=for-the-badge"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-4F8CFF?style=for-the-badge&logo=windows11&logoColor=white">
+</p>
 
-> Status: early development. The device link works on real hardware (Panorama `391a:1011`); the editor app is in progress.
+<h3 align="center">Your cooler has a gorgeous curved AMOLED screen. Use all of it.</h3>
 
-## Why
+<p align="center">
+  <b>Unbounded Panorama 360</b> is the free, open source studio for TRYX Panorama coolers.<br>
+  Put live temperatures, clocks, your own text, photos and videos <b>anywhere</b> on the screen,<br>
+  upright on a vertical cooler, with a different image on the top and on the curved front.
+</p>
 
-KANALI, the official app, places at most three metrics in fixed slots and only works horizontally. The display firmware itself accepts text groups at arbitrary positions with free text, size, colour and background. Unbounded Panorama 360 exposes that.
+<p align="center">
+  <a href="https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest"><b>⬇ Download the installer</b></a>
+  &nbsp;·&nbsp; <a href="#everything-it-does">See what it does</a>
+  &nbsp;·&nbsp; <a href="#open-source">It is open source</a>
+</p>
 
-## How it talks to the cooler
+---
 
-The cooler enumerates as a USB printer-class device and Windows binds it to the in-box `usbprint.sys` driver. The app opens the `GUID_DEVINTERFACE_USBPRINT` interface and uses overlapped `ReadFile`/`WriteFile`. **No driver replacement, no Zadig.** Close KANALI first; only one program can own the device.
+## Why you will love it
 
-Frames are `"TRYX"` + little-endian `uint32` length + a protobuf message (`src/Unbounded.Panorama.Core/Protocol/panorama.proto`).
+The official KANALI app gives you **three metrics in fixed slots, horizontally only**. Mount your cooler vertically and everything reads sideways. The screen can do far more than that, and now it does:
 
-| USB ID | Model | Status |
-|---|---|---|
-| `391a:1011` | Panorama | Verified on hardware (read-only probe) |
-| `391a:1021` | Panorama SE | Same protocol family, untested here |
-| `391a:1031` | Panorama WB | Same protocol family, untested here |
+| | KANALI | **Unbounded Panorama 360** |
+|---|:---:|:---:|
+| Where values can go | 3 fixed slots | **Anywhere, up to 24 elements** |
+| Vertical (portrait) cooler | Horizontal only | **Upright, as mounted** |
 
-## Install
+And on top of that: a different photo or video on the top and on the curved front, your own text with badges in any colour, YouTube import in the best available quality, free drawing, presets, a live video preview and a media library. **All free and open source.**
 
-Download `UnboundedPanorama360-Setup-<version>.exe` from the [latest release](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest) and run it. Windows SmartScreen may warn that the publisher is unknown because the setup is not code-signed: choose More info, then Run anyway. It installs to `Program Files\Unbounded Panorama 360` (.NET is included), asks whether to start with Windows, and installs what the app needs through winget only when it is missing: FFmpeg (video conversion), yt-dlp and Deno (YouTube import) and the PawnIO driver (CPU temperature, clocks and power). Running a newer setup closes the running app and updates it in place. Uninstall from Windows Settings, Apps.
+<p align="center">
+  <img src="docs/images/features.svg" alt="Anything anywhere, two media at once, upright as mounted" width="100%">
+</p>
 
-The app needs administrator rights because CPU sensors are read through a kernel driver (like HWiNFO), but it never shows a UAC prompt once installed: setup registers two Task Scheduler tasks with highest privileges, one the shortcuts use to open the app and one for "Start with Windows". Only the setup itself asks for administrator rights.
+## Everything it does
 
-To build the setup yourself (needs the .NET 10 SDK and Inno Setup 6):
+### 🎛️ A real design studio
+- **Drag anything anywhere**: CPU and GPU temperature, load, clocks, power, fans, RAM, drives, network, plus clock, date and your own text.
+- **Smart guides** like your favourite design tool: magnetic snapping, alignment, equal spacing, centring, multi-select, undo and redo.
+- **Style it your way**: four font weights, any size, a full colour picker with quick and recent colours, gradient badges.
+- **Free drawing** with pen, lines, rectangles and ellipses, right on the screen.
+- **Presets**: save your designs, switch between them in one click, start from ready-made templates.
+
+### 🖼️ Photos and videos, done right
+- **Two media at once**: a video on the flat top face and a photo on the curved front, or one image across the whole screen.
+- **Drop it where it goes**: drag a file over the window and the screen lights up its top, middle or bottom, like snapping a window in Windows.
+- **Exact placement**: move and zoom the background with the mouse, snap it to the edges or the centre, or type exact pixels.
+- **YouTube import**: paste a link, pick the moment and the length, and it downloads in the best quality YouTube offers.
+- **See it move**: the editor plays your video exactly as the cooler will, and the library previews every clip.
+
+### ⚡ Fast and invisible
+- **Opens in about a second**, with no UAC prompt, and can start with Windows straight into the tray.
+- **Prepares your design in the background** while you edit, so pressing Apply usually only uploads.
+- **Uses your NVIDIA GPU** to convert video when you have one, at higher quality and about twice as fast.
+- **Live values update every second** on the cooler, without re-sending your design.
+- **Cleans up after itself**: old conversions are deleted automatically, only what is useful is kept.
+
+## Get it
+
+1. **Download** `UnboundedPanorama360-Setup-<version>.exe` from the [latest release](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest).
+2. **Close KANALI** (only one program can talk to the cooler at a time).
+3. **Run the setup.** It installs everything it needs, only if missing: FFmpeg for video, yt-dlp and Deno for YouTube, and the PawnIO driver for CPU temperature, clocks and power. .NET is included.
+
+Windows SmartScreen may say the publisher is unknown, because the installer is not code-signed. Click **More info**, then **Run anyway**.
+
+Updating is just as easy: run a newer setup and it updates in place, keeping your designs, presets and library. Uninstall any time from Windows Settings, Apps.
+
+## Open source
+
+Unbounded Panorama 360 is **free and open source** under the [MIT license](LICENSE). Every line of code is right here: read it, build it, change it, share it.
+
+- **No account, no telemetry, no ads.** The app talks to your cooler over USB and to nothing else (except YouTube and winget when you ask it to).
+- **Contributions are welcome.** Found a bug, have an idea, own a Panorama SE or WB? Open an [issue](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/issues) or a pull request.
+- **Tested**: 50 automated tests cover layout, snapping, video conversion and the two-media composition.
+
+### Build it yourself
+
+You need Windows and the .NET 10 SDK.
 
 ```powershell
 winget install Microsoft.DotNet.SDK.10 JRSoftware.InnoSetup
-.\build-installer.ps1        # writes dist\UnboundedPanorama360-Setup-<version>.exe; -Run starts it
+dotnet build -c Release              # the app
+dotnet test -c Release               # the tests (FFmpeg needed for the video ones)
+.\build-installer.ps1                # the setup, in dist\
 ```
 
-## Build
-
-Requires the .NET 10 SDK on Windows.
+A read-only hardware probe is included for curious minds (close KANALI first):
 
 ```powershell
-dotnet build -c Release
-# Read-only hardware probe (close KANALI first):
 dotnet run -c Release --project tools/Unbounded.Panorama.Probe -- .\probe-output
 ```
 
+## Under the hood
+
+The cooler appears to Windows as a USB printer-class device bound to the in-box `usbprint.sys` driver. The app opens its `GUID_DEVINTERFACE_USBPRINT` interface with overlapped `ReadFile`/`WriteFile`: **no driver replacement, no Zadig.** Messages are `"TRYX"` + a little-endian `uint32` length + a protobuf message (see `src/Unbounded.Panorama.Core/Protocol/panorama.proto`).
+
+Your design becomes two things: an **overlay** of text groups the cooler's firmware draws itself (so live values are cheap to update) and **one H.264 video** for the background, which FFmpeg composes from your photos, videos and drawing.
+
+The app needs administrator rights because CPU sensors are read through a kernel driver (like HWiNFO). It still never shows a UAC prompt once installed: setup registers two scheduled tasks with highest privileges, one the shortcuts use and one for "Start with Windows".
+
+| USB ID | Model | Status |
+|---|---|---|
+| `391a:1011` | Panorama | Verified on hardware |
+| `391a:1021` | Panorama SE | Same protocol family, untested |
+| `391a:1031` | Panorama WB | Same protocol family, untested |
+
 ## Credits
 
-Protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). This project is an independent Windows implementation and is not affiliated with TRYX or KANALI.
+Protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). Unbounded Panorama 360 is an independent Windows implementation and is not affiliated with TRYX or KANALI.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE) © 2026 Unbounded Technologies. Free to use, modify and share.
+
+<p align="center"><img src="docs/images/logo.svg" alt="Unbounded Panorama 360 logo" width="72"></p>
