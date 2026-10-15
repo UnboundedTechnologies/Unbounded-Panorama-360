@@ -787,7 +787,11 @@ public partial class StudioView : UserControl
                     Vm.ClearSelectionCommand.Execute(null);
                 break;
             case Key.Delete:
-                Vm.DeleteWidgetCommand.Execute(null);
+                // In BACKGROUND mode, Delete removes the media being edited (the other face keeps its own).
+                if (Vm.IsBackgroundMode)
+                    Vm.ClearBackgroundCommand.Execute(null);
+                else
+                    Vm.DeleteWidgetCommand.Execute(null);
                 break;
             case Key.Left: Vm.NudgeSelection(shift ? -10 : -1, 0); break;
             case Key.Right: Vm.NudgeSelection(shift ? 10 : 1, 0); break;

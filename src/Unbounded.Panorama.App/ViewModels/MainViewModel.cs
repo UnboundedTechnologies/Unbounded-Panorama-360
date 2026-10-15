@@ -206,6 +206,9 @@ public sealed partial class MainViewModel : ObservableObject
     public bool IsConnected => EngineState == EngineState.Connected;
     public bool IsKanaliBlocking => EngineState == EngineState.BlockedByKanali;
     public bool HasBackground => !string.IsNullOrEmpty(BackgroundPath);
+
+    /// <summary>A media is shown (a file of yours or one played from the cooler): it can be removed.</summary>
+    public bool HasAnyBackground => HasBackground || BackgroundDeviceFile is not null;
     public bool IsVideoBackground => HasBackground && !MediaPreparer.IsImage(BackgroundPath!);
     public string BackgroundName => BackgroundDeviceFile is { } f
         ? $"From the cooler: {f}"
@@ -557,7 +560,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var face = OtherFaceName;
         SetOther(null, edited: true);
-        Status = $"Removed the {face} media.";
+        Status = $"Removed the {face} media. Ctrl+Z brings it back.";
     }
 
     /// <summary>Still and looping clip of the other face's media for the canvas.</summary>
@@ -1102,6 +1105,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnBackgroundPathChanged(string? value)
     {
         OnPropertyChanged(nameof(HasBackground));
+        OnPropertyChanged(nameof(HasAnyBackground));
         OnPropertyChanged(nameof(IsVideoBackground));
         OnPropertyChanged(nameof(BackgroundName));
         BackgroundEdited();
@@ -1110,6 +1114,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnBackgroundDeviceFileChanged(string? value)
     {
         OnPropertyChanged(nameof(BackgroundName));
+        OnPropertyChanged(nameof(HasAnyBackground));
         BackgroundEdited();
     }
 
@@ -1918,11 +1923,15 @@ public sealed partial class MainViewModel : ObservableObject
             var face = ActiveFaceName;
             EditOtherMedia();
             SetOther(null, edited: true);
-            Status = $"Cleared the {face}.";
+            Status = $"Removed the {face} media. Ctrl+Z brings it back.";
             return;
         }
+        if (!HasAnyBackground)
+            return;
+        var name = BackgroundDeviceFile ?? Path.GetFileName(BackgroundPath);
         BackgroundDeviceFile = null;
         BackgroundPath = null;
+        Status = $"Removed {name}. Ctrl+Z brings it back.";
     }
 
     // ================================================================== library

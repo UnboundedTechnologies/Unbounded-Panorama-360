@@ -5,6 +5,32 @@
              xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core"
              xmlns:controls="clr-namespace:Unbounded.Panorama.App.Controls">
     <UserControl.Resources>
+        <!-- Trash pill in the top-right corner of a face (canvas pixels: the cooler is 1080 wide) -->
+        <Style x:Key="CanvasRemove" TargetType="Button">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,36,36,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" CornerRadius="40" Padding="30,16" Background="#E60B111E" BorderBrush="#99FF4D6D" BorderThickness="3">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" FontFamily="{StaticResource Icons}" FontSize="40" Foreground="#FF8FA3" VerticalAlignment="Center" />
+                                <TextBlock Text="Remove" FontSize="40" FontFamily="{StaticResource Display}" FontWeight="SemiBold" Foreground="#FF8FA3"
+                                           Margin="16,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#FF4D6D" />
+                                <Setter TargetName="b" Property="BorderBrush" Value="#FF4D6D" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="DropHint" TargetType="TextBlock">
             <Setter Property="FontSize" Value="54" />
             <Setter Property="FontFamily" Value="{StaticResource Display}" />
@@ -110,7 +136,7 @@
                         <WrapPanel>
                             <Button Content="Choose file…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
                             <Button Content="YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
-                            <Button Content="Clear" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}" />
+                            <Button Content="Remove" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}" ToolTip="Remove this media (the other face keeps its own). In BACKGROUND mode: Delete key, or Remove on the screen." />
                         </WrapPanel>
                         <!-- Drop zone: says where files can go; clicking it browses like "Choose file". -->
                         <Button Command="{Binding ChooseBackgroundCommand}" Cursor="Hand" Margin="0,8,0,0"
@@ -607,6 +633,20 @@
                                 <Rectangle x:Name="BackgroundSurface" Fill="Transparent" Cursor="SizeAll"
                                            Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}"
                                            MouseLeftButtonDown="OnBgDown" MouseMove="OnBgMove" MouseLeftButtonUp="OnBgUp" MouseWheel="OnBgWheel" />
+
+                                <!-- Remove buttons: one per media, in the corner of its face (only the buttons take clicks) -->
+                                <Canvas Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}">
+                                    <Grid Canvas.Left="{Binding AreaRect.X}" Canvas.Top="{Binding AreaRect.Y}" Width="{Binding AreaRect.Width}" Height="{Binding AreaRect.Height}"
+                                          Visibility="{Binding HasAnyBackground, Converter={StaticResource Visible}}">
+                                        <Button Style="{StaticResource CanvasRemove}" Command="{Binding ClearBackgroundCommand}"
+                                                ToolTip="Remove this media (the other face keeps its own). Delete key does the same." />
+                                    </Grid>
+                                    <Grid Canvas.Left="{Binding OtherAreaRect.X}" Canvas.Top="{Binding OtherAreaRect.Y}" Width="{Binding OtherAreaRect.Width}" Height="{Binding OtherAreaRect.Height}"
+                                          Visibility="{Binding HasOther, Converter={StaticResource Visible}}">
+                                        <Button Style="{StaticResource CanvasRemove}" Command="{Binding RemoveOtherMediaCommand}"
+                                                ToolTip="Remove this face's media" />
+                                    </Grid>
+                                </Canvas>
 
                                 <Canvas x:Name="GuideLayer" IsHitTestVisible="False" />
                                 <Canvas IsHitTestVisible="False">
