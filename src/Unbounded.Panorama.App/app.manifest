@@ -4,9 +4,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- CPU temperature, clocks and power are read through the PawnIO kernel driver,
-             which only administrators can open (same as HWiNFO / KANALI). -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- The app needs administrator rights (CPU temperature, clocks and power come through the
+             PawnIO kernel driver) but asks for them itself in Program.Main: the installed app
+             relaunches through its elevated launcher task, so opening it shows no UAC prompt. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

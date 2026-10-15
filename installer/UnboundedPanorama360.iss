@@ -59,6 +59,7 @@ Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName} now"; Flags: nowait
 [UninstallRun]
 Filename: "{app}\{#AppExe}"; Parameters: "--quit"; Flags: runhidden waituntilterminated; RunOnceId: "QuitApp"
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#TaskName}"" /F"; Flags: runhidden; RunOnceId: "DeleteTask"
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#TaskName} Launcher"" /F"; Flags: runhidden; RunOnceId: "DeleteLauncherTask"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\setup"
@@ -123,20 +124,18 @@ begin
   end;
 end;
 
-procedure ConfigureAutostart();
+{ The app registers its own tasks (the launcher its shortcuts use to open without a UAC prompt,
+  and Start with Windows when selected), so setup and the app's Settings page create identical ones. }
+function ConfigureTasks(): Boolean;
 var
   Code: Integer;
-  Exe: String;
+  Args: String;
 begin
-  Exe := ExpandConstant('{app}\{#AppExe}');
+  SetStatus('Setting up shortcuts and Start with Windows...');
+  Args := '--register-tasks';
   if WizardIsTaskSelected('autostart') then
-  begin
-    SetStatus('Setting up Start with Windows...');
-    Exec(ExpandConstant('{sys}\schtasks.exe'),
-      '/Create /TN "{#TaskName}" /TR "\"' + Exe + '\" --tray" /SC ONLOGON /RL HIGHEST /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  end
-  else
-    Exec(ExpandConstant('{sys}\schtasks.exe'), '/Delete /TN "{#TaskName}" /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    Args := Args + ' autostart';
+  Result := Exec(ExpandConstant('{app}\{#AppExe}'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -151,7 +150,8 @@ begin
     InstallDependency('ffmpeg', 'FFmpeg (video conversion)', Failed);
     InstallDependency('ytdlp', 'yt-dlp and Deno (YouTube import)', Failed);
     InstallDependency('pawnio', 'PawnIO driver (CPU temperature, clocks, power)', Failed);
-    ConfigureAutostart();
+    if not ConfigureTasks() then
+      Failed := Failed + #13#10 + '  - Start with Windows and the no-prompt shortcut (Windows Task Scheduler)';
     if Failed <> '' then
       MsgBox('Unbounded Panorama 360 is installed, but these could not be installed automatically:' + Failed + #13#10#13#10 +
              'Check your internet connection and run this setup again. Details: ' + ExpandConstant('{app}\setup\deps.log'),
