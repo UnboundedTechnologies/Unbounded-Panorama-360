@@ -1189,6 +1189,47 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (!wasConnected && state == EngineState.Connected && _storage.AutoApply && !IsBusy)
             _ = ApplyCoreAsync(includeBackground: true, quiet: true);
+        else if (!wasConnected && state == EngineState.Connected)
+            _ = PruneMediaCacheAsync(); // (an Apply cleans up after itself)
+    }
+
+    /// <summary>
+    /// Deletes cached conversions that are no longer needed: what is stored on the cooler and the
+    /// current design are kept (so Apply and the "On the cooler" previews stay instant); older designs
+    /// go. Needs the cooler's file list, so it only runs while connected.
+    /// </summary>
+    private async Task PruneMediaCacheAsync()
+    {
+        if (!IsConnected)
+            return;
+        try
+        {
+            var onCooler = await _engine.ListDeviceMediaAsync();
+            var keepKeys = new HashSet<string>(onCooler.Select(m => DeviceKey(m.Name)).OfType<string>());
+            var keepFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var layout = BuildLayout();
+            if (layout.Background.DeviceFile is null)
+            {
+                var overlay = RenderDrawingPng(layout);
+                if (overlay is not null)
+                    keepFiles.Add(overlay);
+                try
+                {
+                    keepKeys.Add(MediaPreparer.KeyOf(layout.Background, layout.Orientation, overlay, layout.SecondBackground));
+                }
+                catch (Exception)
+                {
+                    // A file of the design is missing: nothing of it to keep.
+                }
+            }
+            var freed = await Task.Run(() => _preparer.PruneCache(keepKeys, keepFiles));
+            if (freed > 0)
+                AddLog($"Freed {freed / 1048576.0:0} MB of old conversions (kept what is on the cooler and your current design).");
+        }
+        catch (Exception ex)
+        {
+            AddLog("Cache cleanup skipped: " + ex.Message);
+        }
     }
 
     // ================================================================== selection
@@ -2236,6 +2277,8 @@ public sealed partial class MainViewModel : ObservableObject
             _storage.AutoApply = true;
             Commit();
             Status = quiet ? "Restored your design on the cooler." : "Applied to the cooler.";
+            if (includeBackground)
+                _ = PruneMediaCacheAsync();
         }
         catch (Exception ex)
         {

@@ -97,6 +97,44 @@ public class BackgroundConversionTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => apply);
     }
 
+    [Fact]
+    public async Task Cache_cleanup_keeps_what_is_needed_and_frees_the_rest()
+    {
+        if (!_ready)
+            return;
+        var cache = Path.Combine(_dir, "cache-prune");
+        var preparer = new MediaPreparer(cache);
+        // Two converted designs: one "on the cooler", one old.
+        var kept = await preparer.PrepareAsync(Media(), Orientation.Portrait, null, null, CancellationToken.None);
+        var old = await preparer.PrepareAsync(Media(), Orientation.Landscape, null, null, CancellationToken.None);
+        var drawing = Path.Combine(cache, "ink-0123456789ABCDEF.png");
+        var oldDrawing = Path.Combine(cache, "ink-FEDCBA9876543210.png");
+        File.WriteAllBytes(drawing, [1]);
+        File.WriteAllBytes(oldDrawing, [1]);
+        var keepKey = Path.GetFileNameWithoutExtension(kept.StreamPath);
+
+        // A conversion in progress (a third, different design) keeps its half-written file.
+        var third = Media();
+        third.MediaWidth *= 1.25;
+        var running = preparer.PrepareAsync(third, Orientation.Portrait, null, null, CancellationToken.None, background: true);
+        await Task.Delay(1500);
+        Assert.False(running.IsCompleted, "the third conversion finished before the cleanup ran");
+        Assert.NotEmpty(Directory.GetFiles(cache, "*.tmp"));
+
+        var freed = preparer.PruneCache(new HashSet<string> { keepKey }, new HashSet<string> { drawing });
+        Assert.NotEmpty(Directory.GetFiles(cache, "*.tmp")); // still there: it is being written
+
+        Assert.True(freed > 0);
+        Assert.True(File.Exists(kept.StreamPath));
+        Assert.True(File.Exists(kept.PreviewPath));
+        Assert.True(File.Exists(drawing));
+        Assert.False(File.Exists(old.StreamPath));
+        Assert.False(File.Exists(old.PreviewPath));
+        Assert.False(File.Exists(oldDrawing));
+        var finished = await running;
+        Assert.True(File.Exists(finished.StreamPath)); // the running conversion completed normally
+    }
+
     private sealed class SyncProgress(Action<ProgressInfo> report) : IProgress<ProgressInfo>
     {
         public void Report(ProgressInfo value)

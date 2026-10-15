@@ -233,6 +233,43 @@ public sealed class MediaPreparer
     public static string KeyOf(BackgroundMedia media, Orientation orientation, string? overlayPng, BackgroundMedia? second) =>
         CacheKey(media, orientation, overlayPng, Placement.Pairable(media, second, orientation));
 
+    /// <summary>
+    /// Deletes cached conversions nobody needs: everything except the designs in <paramref name="keepKeys"/>
+    /// (what is on the cooler, the current design), the files in <paramref name="keepFiles"/> (the
+    /// current drawing) and whatever a running conversion is using. Returns the bytes freed.
+    /// </summary>
+    public long PruneCache(IReadOnlySet<string> keepKeys, IReadOnlySet<string> keepFiles)
+    {
+        string[] running;
+        lock (_jobsGate)
+            running = [.. _jobs.Keys];
+        long freed = 0;
+        foreach (var file in Directory.EnumerateFiles(_cacheDir))
+        {
+            var name = Path.GetFileName(file);
+            var key = name.Split('.')[0];
+            if (keepFiles.Contains(file) || keepKeys.Contains(key) || running.Contains(key))
+                continue;
+            // Loop pieces and half-written files belong to a conversion in progress (names are not keys).
+            if (running.Length > 0 && (name.StartsWith("loop-", StringComparison.Ordinal) || name.EndsWith(".tmp", StringComparison.Ordinal)))
+                continue;
+            try
+            {
+                var size = new FileInfo(file).Length;
+                File.Delete(file);
+                freed += size;
+            }
+            catch (IOException)
+            {
+                // In use (being uploaded or read); it goes next time.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+        return freed;
+    }
+
     /// <summary>Stops background conversions nobody is waiting for (the design changed again).</summary>
     public void CancelBackground()
     {
