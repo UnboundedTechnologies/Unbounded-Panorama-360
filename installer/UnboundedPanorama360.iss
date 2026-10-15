@@ -67,7 +67,10 @@ Type: filesandordirs; Name: "{app}\setup"
 [Code]
 const
   QuitScript = 'try { $e = [Threading.EventWaitHandle]::OpenExisting(''UnboundedPanorama360.SingleInstance.Quit''); [void]$e.Set() } catch { } ' +
-               'Wait-Process -Name UnboundedPanorama360 -Timeout 150 -ErrorAction SilentlyContinue; ' +
+               { Poll the process list instead of Wait-Process, which needs access to the process itself: setup kept
+                 failing with the app started by its launcher task, and Wait-Process returned at once (errors silenced)
+                 while the app was still running when reproduced from a non-admin shell. Listing processes always works. }
+               '$n = 0; while ((Get-Process -Name UnboundedPanorama360 -ErrorAction SilentlyContinue) -and $n -lt 300) { Start-Sleep -Milliseconds 500; $n++ }; ' +
                'if (Get-Process -Name UnboundedPanorama360 -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }';
 
 function PowerShell(const Args: String; var ResultCode: Integer): Boolean;
