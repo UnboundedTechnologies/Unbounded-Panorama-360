@@ -117,15 +117,21 @@ public partial class App : Application
 
         DispatcherUnhandledException += OnUnhandled;
 
+        var started = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+        var runtimeMs = (DateTime.Now - started).TotalMilliseconds;
+        var phase = System.Diagnostics.Stopwatch.StartNew();
+
         var storage = new AppStorage();
         // Sensors are opened after the window is shown (see below): it takes a second or more.
         _sensors = new SensorHub();
         var preparer = new MediaPreparer(storage.MediaCacheDir);
         _engine = new DisplayEngine(preparer, new WidgetText(_sensors));
         _viewModel = new MainViewModel(_sensors, _engine, preparer, storage);
+        var viewModelMs = phase.Elapsed.TotalMilliseconds;
 
         _tray = new TrayIcon(() => Dispatcher.BeginInvoke(ShowWindow), () => Dispatcher.BeginInvoke(ExitApp));
         _window = new MainWindow(_viewModel);
+        var windowMs = phase.Elapsed.TotalMilliseconds - viewModelMs;
         _window.Closing += (_, args) =>
         {
             if (_exiting)
@@ -137,18 +143,22 @@ public partial class App : Application
         };
 
         var startHidden = e.Args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
-        var started = System.Diagnostics.Process.GetCurrentProcess().StartTime;
+        var phases = $"(.NET start {runtimeMs:0}, view model {viewModelMs:0}, window build {windowMs:0}";
         if (!startHidden)
         {
-            _window.ContentRendered += (_, _) => LogStartup($"window visible after {(DateTime.Now - started).TotalMilliseconds:0} ms");
+            var showAt = phase.Elapsed.TotalMilliseconds;
+            _window.ContentRendered += (_, _) => LogStartup(
+                $"window visible after {(DateTime.Now - started).TotalMilliseconds:0} ms {phases}, first draw {phase.Elapsed.TotalMilliseconds - showAt:0})");
             ShowWindow();
         }
+        else
+            LogStartup($"started in the tray after {(DateTime.Now - started).TotalMilliseconds:0} ms {phases})");
 
         var sensors = _sensors;
         _ = sensors.StartInBackground().ContinueWith(t => Dispatcher.BeginInvoke(() =>
             LogStartup(t.IsFaulted
                 ? $"sensors failed to start: {t.Exception?.GetBaseException().Message}"
-                : $"sensors ready after {(DateTime.Now - started).TotalMilliseconds:0} ms")));
+                : $"sensors ready after {(DateTime.Now - started).TotalMilliseconds:0} ms (open hardware {sensors.StartTimings.Open.TotalMilliseconds:0}, first read {sensors.StartTimings.FirstRead.TotalMilliseconds:0})")));
     }
 
     /// <summary>Startup timings go to the Activity log and to startup.log (last 50 lines).</summary>

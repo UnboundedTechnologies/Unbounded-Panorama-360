@@ -47,10 +47,16 @@ public sealed class SensorHub : IDisposable
 
     public event Action? Updated;
 
+    /// <summary>How long opening the hardware and the first full reading took (startup diagnostics).</summary>
+    public (TimeSpan Open, TimeSpan FirstRead) StartTimings { get; private set; }
+
     public void Start()
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _computer.Open();
+        var open = sw.Elapsed;
         Refresh();
+        StartTimings = (open, sw.Elapsed - open);
         lock (_gate)
         {
             if (_disposed)
