@@ -51,8 +51,21 @@ public sealed class SensorHub : IDisposable
     {
         _computer.Open();
         Refresh();
-        _timer = new Timer(_ => Refresh(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+            _timer = new Timer(_ => Refresh(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
     }
+
+    /// <summary>
+    /// Opens the hardware on a worker thread (it takes about a second, more with the CPU driver),
+    /// so the window can appear immediately. <see cref="Updated"/> fires once values exist.
+    /// </summary>
+    public Task StartInBackground() => Task.Run(Start);
+
+    private bool _disposed;
 
     public float? Value(string? sensorId)
     {
@@ -219,6 +232,8 @@ public sealed class SensorHub : IDisposable
 
     public void Dispose()
     {
+        lock (_gate)
+            _disposed = true;
         _timer?.Dispose();
         _computer.Close();
     }

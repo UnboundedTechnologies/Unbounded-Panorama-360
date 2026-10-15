@@ -213,6 +213,7 @@ public sealed partial class MainViewModel : ObservableObject
         SensorView = new ListCollectionView(_sensorRows);
         SensorView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(SensorRow.Group)));
 
+        _sensors.Updated += () => _ui.BeginInvoke(OnSensorsUpdated);
         _engine.StateChanged += (state, detail) => _ui.BeginInvoke(() => OnEngineState(state, detail));
         _engine.Log += line => _ui.BeginInvoke(() => AddLog(line));
 
@@ -837,8 +838,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ================================================================== previews
 
-    private int _sensorRefreshCountdown;
-
     private void RefreshPreviews()
     {
         var fahrenheit = Fahrenheit;
@@ -847,19 +846,26 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateSensorValues();
         CpuTempText = _sensors.Format(SensorHub.RolePrefix + "cpu-temp", 0, true, fahrenheit);
         GpuTempText = _sensors.Format(SensorHub.RolePrefix + "gpu-temp", 0, true, fahrenheit);
-        // The sensor list can grow after start-up (hardware discovered late); refresh it now and then.
-        if (--_sensorRefreshCountdown <= 0)
-        {
-            _sensorRefreshCountdown = 30;
-            if (_sensors.Catalog.Count != _knownSensorCount)
-            {
-                _knownSensorCount = _sensors.Catalog.Count;
-                RebuildSensorRows();
-            }
-        }
     }
 
     private int _knownSensorCount = -1;
+
+    /// <summary>
+    /// Sensors start in the background after the window appears; rebuild the picker the moment
+    /// they arrive (and whenever hardware is added later) instead of waiting for a timer.
+    /// </summary>
+    private void OnSensorsUpdated()
+    {
+        var count = _sensors.Catalog.Count;
+        if (count == _knownSensorCount)
+            return;
+        var first = _knownSensorCount <= 0;
+        _knownSensorCount = count;
+        RebuildSensorRows();
+        RefreshPreviews();
+        if (first)
+            OnPropertyChanged(nameof(SelectedSensorRow));
+    }
 
     private async Task RenderBackgroundPreviewAsync()
     {

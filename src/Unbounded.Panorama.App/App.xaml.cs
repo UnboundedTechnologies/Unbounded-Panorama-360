@@ -118,8 +118,8 @@ public partial class App : Application
         DispatcherUnhandledException += OnUnhandled;
 
         var storage = new AppStorage();
+        // Sensors are opened after the window is shown (see below): it takes a second or more.
         _sensors = new SensorHub();
-        _sensors.Start();
         var preparer = new MediaPreparer(storage.MediaCacheDir);
         _engine = new DisplayEngine(preparer, new WidgetText(_sensors));
         _viewModel = new MainViewModel(_sensors, _engine, preparer, storage);
@@ -137,8 +137,35 @@ public partial class App : Application
         };
 
         var startHidden = e.Args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
+        var started = System.Diagnostics.Process.GetCurrentProcess().StartTime;
         if (!startHidden)
-            ShowWindow();    }
+        {
+            _window.ContentRendered += (_, _) => LogStartup($"window visible after {(DateTime.Now - started).TotalMilliseconds:0} ms");
+            ShowWindow();
+        }
+
+        var sensors = _sensors;
+        _ = sensors.StartInBackground().ContinueWith(t => Dispatcher.BeginInvoke(() =>
+            LogStartup(t.IsFaulted
+                ? $"sensors failed to start: {t.Exception?.GetBaseException().Message}"
+                : $"sensors ready after {(DateTime.Now - started).TotalMilliseconds:0} ms")));
+    }
+
+    /// <summary>Startup timings go to the Activity log and to startup.log (last 50 lines).</summary>
+    private void LogStartup(string line)
+    {
+        _viewModel?.Report(line);
+        try
+        {
+            var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnboundedPanorama360", "startup.log");
+            var lines = System.IO.File.Exists(path) ? System.IO.File.ReadAllLines(path).ToList() : [];
+            lines.Add($"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {line}");
+            System.IO.File.WriteAllLines(path, lines.TakeLast(50));
+        }
+        catch (System.IO.IOException)
+        {
+        }
+    }
 
     private void ShowWindow()
     {

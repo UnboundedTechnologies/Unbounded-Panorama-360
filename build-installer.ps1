@@ -27,8 +27,9 @@ $iscc = @(
 if (-not $iscc) { throw 'Inno Setup 6 not found. Install it with: winget install JRSoftware.InnoSetup' }
 
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
-Write-Host "Publishing $version (self-contained, win-x64)..."
-& dotnet publish $project -c Release -r win-x64 --self-contained true -o $publish --nologo -v q
+Write-Host "Publishing $version (self-contained, win-x64, ReadyToRun)..."
+# ReadyToRun pre-compiles the code, so the app does not JIT-compile itself at every launch.
+& dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o $publish --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)." }
 
 Write-Host 'Compiling the installer...'
