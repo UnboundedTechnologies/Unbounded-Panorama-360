@@ -31,7 +31,7 @@
 
         <Popup x:Name="Pop" PlacementTarget="{Binding ElementName=Opener}" Placement="Bottom" VerticalOffset="6" StaysOpen="False"
                AllowsTransparency="True" PopupAnimation="Fade" IsOpen="{Binding IsChecked, ElementName=Opener, Mode=TwoWay}">
-            <Border Background="#F20D1424" BorderBrush="{StaticResource LineHover}" BorderThickness="1" CornerRadius="14" Padding="14" Width="282">
+            <Border Background="#F20D1424" BorderBrush="{StaticResource LineHover}" BorderThickness="1" CornerRadius="14" Padding="14" Width="316">
                 <StackPanel>
                     <!-- Saturation (x) / brightness (y) -->
                     <Grid x:Name="SvArea" Height="170" Cursor="Cross" ClipToBounds="True"
@@ -100,23 +100,23 @@
                             <ColumnDefinition Width="6" />
                             <ColumnDefinition />
                             <ColumnDefinition Width="8" />
-                            <ColumnDefinition Width="92" />
+                            <ColumnDefinition Width="98" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="R" Style="{StaticResource Label}" Margin="0,0,0,4" />
-                            <TextBox x:Name="RBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Red 0-255" />
+                            <TextBox x:Name="RBox" Padding="4,0" HorizontalContentAlignment="Center" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Red 0-255" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="G" Style="{StaticResource Label}" Margin="0,0,0,4" />
-                            <TextBox x:Name="GBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Green 0-255" />
+                            <TextBox x:Name="GBox" Padding="4,0" HorizontalContentAlignment="Center" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Green 0-255" />
                         </StackPanel>
                         <StackPanel Grid.Column="4">
                             <TextBlock Text="B" Style="{StaticResource Label}" Margin="0,0,0,4" />
-                            <TextBox x:Name="BBox" Padding="6,0" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Blue 0-255" />
+                            <TextBox x:Name="BBox" Padding="4,0" HorizontalContentAlignment="Center" LostFocus="OnRgbCommit" KeyDown="OnRgbKey" ToolTip="Blue 0-255" />
                         </StackPanel>
                         <StackPanel Grid.Column="6">
                             <TextBlock Text="HEX" Style="{StaticResource Label}" Margin="0,0,0,4" />
-                            <TextBox x:Name="PopHexBox" Padding="6,0" LostFocus="OnHexBoxCommit" KeyDown="OnHexBoxKey" />
+                            <TextBox x:Name="PopHexBox" Padding="4,0" HorizontalContentAlignment="Center" LostFocus="OnHexBoxCommit" KeyDown="OnHexBoxKey" />
                         </StackPanel>
                     </Grid>
                     <TextBlock x:Name="HsvText" Foreground="{StaticResource Muted}" FontSize="11" FontFamily="Cascadia Mono, Consolas" Margin="0,10,0,0" />
