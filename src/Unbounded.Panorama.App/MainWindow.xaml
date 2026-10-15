@@ -80,8 +80,11 @@
                                 ToolTip="KANALI owns the cooler while it runs. Closing it lets this app take over." />
                     </StackPanel>
 
-                    <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{StaticResource Muted}" FontSize="12"
-                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0">
+                        <TextBlock Text="{Binding Status}" Foreground="{StaticResource Fg}" FontSize="12" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding ProgressDetail}" Foreground="{StaticResource Muted}" FontSize="11" FontFamily="Cascadia Mono, Consolas"
+                                   HorizontalAlignment="Right" Visibility="{Binding ProgressDetail, Converter={StaticResource Visible}}" />
+                    </StackPanel>
 
                     <Button Grid.Column="3" Style="{StaticResource Primary}" Command="{Binding ApplyCommand}" VerticalAlignment="Center" Margin="0,0,14,0"
                             WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Send the design, background and drawing to the cooler (Ctrl+Enter)">
@@ -99,6 +102,11 @@
                         <Button Style="{StaticResource CaptionClose}" Content="&#xE8BB;" Click="OnClose" WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Close to tray" />
                     </StackPanel>
                 </Grid>
+
+                <!-- Apply progress: converting, then uploading -->
+                <ProgressBar Height="3" VerticalAlignment="Bottom" Margin="16,0,16,0"
+                             Value="{Binding ProgressValue, Mode=OneWay}" IsIndeterminate="{Binding ProgressIndeterminate, Mode=OneWay}"
+                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
 
                 <!-- ====================================================== body -->
                 <Grid Grid.Row="1">

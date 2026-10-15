@@ -6,7 +6,9 @@ using System.Text.RegularExpressions;
 
 namespace Unbounded.Panorama.Media;
 
-public sealed record VideoFormatInfo(string Id, int Width, int Height, double Fps, string Codec, bool Hdr);
+/// <param name="Bytes">Exact size of the whole stream when YouTube reports it (direct https formats).</param>
+/// <param name="KilobitsPerSecond">Average total bitrate, used to estimate a section's size.</param>
+public sealed record VideoFormatInfo(string Id, int Width, int Height, double Fps, string Codec, bool Hdr, string Protocol, long? Bytes, double KilobitsPerSecond);
 
 public sealed record YouTubeVideo(string Url, string Id, string Title, string Channel, double DurationSeconds, string? ThumbnailUrl, VideoFormatInfo Best, bool OnlyHdrAvailable)
 {
@@ -42,13 +44,18 @@ public sealed partial class YouTubeImporter(string downloadDir)
             var width = f.TryGetProperty("width", out var w) && w.ValueKind == JsonValueKind.Number ? w.GetInt32() : 0;
             var fps = f.TryGetProperty("fps", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble() : 0;
             var range = Str(f, "dynamic_range") ?? "SDR";
-            formats.Add(new VideoFormatInfo(Str(f, "format_id") ?? "?", width, h.GetInt32(), fps, ShortCodec(vcodec), !range.Equals("SDR", StringComparison.OrdinalIgnoreCase)));
+            var size = Num(f, "filesize") ?? Num(f, "filesize_approx");
+            long? bytes = size is > 0 ? (long)size.Value : null;
+            formats.Add(new VideoFormatInfo(Str(f, "format_id") ?? "?", width, h.GetInt32(), fps, ShortCodec(vcodec),
+                !range.Equals("SDR", StringComparison.OrdinalIgnoreCase), Str(f, "protocol") ?? "", bytes, Num(f, "tbr") ?? 0));
         }
         if (formats.Count == 0)
             throw new InvalidOperationException("This video has no downloadable video streams.");
 
+        // Best resolution and frame rate first; at equal quality prefer a direct (https) stream with a known size.
         static IEnumerable<VideoFormatInfo> Ranked(IEnumerable<VideoFormatInfo> list) =>
-            list.OrderByDescending(f => f.Height).ThenByDescending(f => f.Width).ThenByDescending(f => f.Fps);
+            list.OrderByDescending(f => f.Height).ThenByDescending(f => f.Width).ThenByDescending(f => f.Fps)
+                .ThenByDescending(f => f.Protocol == "https").ThenByDescending(f => f.Bytes is not null);
         var sdr = Ranked(formats.Where(f => !f.Hdr)).FirstOrDefault();
         var best = sdr ?? Ranked(formats).First();
 
@@ -72,7 +79,7 @@ public sealed partial class YouTubeImporter(string downloadDir)
         if (File.Exists(png))
             return png;
 
-        var clip = await DownloadSectionAsync(video, seconds, 0.5, "bv*[height<=720][dynamic_range=SDR]/bv*[height<=720]/bv*", Path.Combine(dir, stem), null, cancellationToken).ConfigureAwait(false);
+        var clip = await DownloadSectionAsync(video, seconds, 0.5, "bv*[height<=720][dynamic_range=SDR]/bv*[height<=720]/bv*", Path.Combine(dir, stem), null, null, cancellationToken).ConfigureAwait(false);
         try
         {
             await MediaPreparer.RunFfmpegAsync([
@@ -88,34 +95,65 @@ public sealed partial class YouTubeImporter(string downloadDir)
         return png;
     }
 
-    /// <summary>Downloads [start, start+length] at the best resolution.</summary>
-    public Task<ImportedClip> DownloadAsync(YouTubeVideo video, double start, double length, IProgress<string>? progress, CancellationToken cancellationToken)
+    /// <summary>Downloads [start, start+length] in exactly the format shown as "best available".</summary>
+    public Task<ImportedClip> DownloadAsync(YouTubeVideo video, double start, double length, IProgress<ProgressInfo>? progress, CancellationToken cancellationToken)
     {
         var stem = Path.Combine(downloadDir, $"{video.Id}-{start.ToString("0.###", CultureInfo.InvariantCulture)}-{length.ToString("0.###", CultureInfo.InvariantCulture)}");
-        return DownloadSectionAsync(video, start, length, FormatSelector, stem, progress, cancellationToken);
+        var estimate = EstimateBytes(video, length);
+        return DownloadSectionAsync(video, start, length, video.Best.Id, stem, estimate, progress, cancellationToken);
     }
 
-    private async Task<ImportedClip> DownloadSectionAsync(YouTubeVideo video, double start, double length, string format, string stem, IProgress<string>? progress, CancellationToken cancellationToken)
+    /// <summary>Expected size of a section: the stream's exact size pro rata, else its bitrate × length.</summary>
+    public static long? EstimateBytes(YouTubeVideo video, double length)
+    {
+        if (video.Best.Bytes is { } total && total > 0 && video.DurationSeconds > 0)
+            return (long)(total * Math.Min(1, length / video.DurationSeconds));
+        if (video.Best.KilobitsPerSecond > 0)
+            return (long)(video.Best.KilobitsPerSecond * 1000 / 8 * length);
+        return null;
+    }
+
+    private async Task<ImportedClip> DownloadSectionAsync(YouTubeVideo video, double start, double length, string format, string stem, long? estimatedBytes,
+        IProgress<ProgressInfo>? progress, CancellationToken cancellationToken)
     {
         start = Math.Max(0, start);
         var end = video.DurationSeconds > 0 ? Math.Min(start + length, video.DurationSeconds) : start + length;
         if (end <= start)
             throw new InvalidOperationException("The chosen start is past the end of the video.");
 
-        foreach (var stale in Directory.EnumerateFiles(Path.GetDirectoryName(stem)!, Path.GetFileName(stem) + ".*"))
+        var folder = Path.GetDirectoryName(stem)!;
+        var prefix = Path.GetFileName(stem) + ".";
+        foreach (var stale in Directory.EnumerateFiles(folder, prefix + "*"))
             TryDelete(stale);
 
+        // Section downloads go through ffmpeg, which prints no percentage; measure the file as it grows.
+        using var watch = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var monitor = progress is null ? Task.CompletedTask : MonitorAsync(folder, prefix, estimatedBytes, progress, watch.Token);
+
         var section = $"*{start.ToString("0.###", CultureInfo.InvariantCulture)}-{end.ToString("0.###", CultureInfo.InvariantCulture)}";
-        var output = await RunYtDlpAsync([
-            "--no-playlist", "--no-part", "--newline",
-            "-f", format,
-            "--download-sections", section,
-            // Keep source timestamps so the true section start (a keyframe before 'start') is known.
-            "--downloader-args", "ffmpeg_o:-copyts",
-            "-o", stem + ".%(ext)s",
-            "--print", "after_move:filepath",
-            video.Url,
-        ], progress, cancellationToken).ConfigureAwait(false);
+        string output;
+        var completed = false;
+        try
+        {
+            output = await RunYtDlpAsync([
+                "--no-playlist", "--no-part", "--newline",
+                "-f", format,
+                "--download-sections", section,
+                // Keep source timestamps so the true section start (a keyframe before 'start') is known.
+                "--downloader-args", "ffmpeg_o:-copyts",
+                "-o", stem + ".%(ext)s",
+                "--print", "after_move:filepath",
+                video.Url,
+            ], null, cancellationToken).ConfigureAwait(false);
+            completed = true;
+        }
+        finally
+        {
+            watch.Cancel();
+            try { await monitor.ConfigureAwait(false); } catch (OperationCanceledException) { }
+            if (!completed)
+                await DeletePartialAsync(folder, prefix).ConfigureAwait(false);
+        }
 
         var file = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault(File.Exists)
             ?? Directory.EnumerateFiles(Path.GetDirectoryName(stem)!, Path.GetFileName(stem) + ".*").FirstOrDefault()
@@ -123,8 +161,94 @@ public sealed partial class YouTubeImporter(string downloadDir)
 
         var startTime = await ProbeStartTimeAsync(file, cancellationToken).ConfigureAwait(false);
         var offset = Math.Max(0, start - startTime);
+        progress?.Report(new ProgressInfo("Download complete.", 1, $"{SizeOf(file) / 1048576.0:F0} MB"));
         return new ImportedClip(file, offset, end - start);
     }
+
+    /// <summary>Reports size, percentage (against the estimate), speed and time left every half second.</summary>
+    private static async Task MonitorAsync(string folder, string prefix, long? estimate, IProgress<ProgressInfo> progress, CancellationToken token)
+    {
+        var started = Stopwatch.StartNew();
+        var samples = new Queue<(double T, long Bytes)>();
+        while (!token.IsCancellationRequested)
+        {
+            long bytes = 0;
+            foreach (var f in Directory.EnumerateFiles(folder, prefix + "*"))
+                bytes += SizeOf(f);
+
+            var t = started.Elapsed.TotalSeconds;
+            samples.Enqueue((t, bytes));
+            while (samples.Count > 1 && t - samples.Peek().T > 5)
+                samples.Dequeue();
+            var (t0, b0) = samples.Peek();
+            var speed = t - t0 > 0.5 ? (bytes - b0) / (t - t0) : 0;
+
+            var mb = bytes / 1048576.0;
+            var parts = new List<string> { estimate is { } e ? $"{mb:F0} of ~{e / 1048576.0:F0} MB" : $"{mb:F0} MB" };
+            if (speed > 0)
+                parts.Add($"{speed / 1048576.0:F1} MB/s");
+            double? fraction = null;
+            if (estimate is { } total && total > 0)
+            {
+                // The section starts at the keyframe before the chosen start, so it can run a little over.
+                fraction = Math.Min(0.99, (double)bytes / total);
+                if (speed > 0 && bytes < total)
+                    parts.Add($"~{FormatTime((total - bytes) / speed)} left");
+            }
+            parts.Add($"{FormatTime(t)} elapsed");
+
+            progress.Report(new ProgressInfo(
+                fraction is { } p ? $"Downloading… {p:P0}" : "Downloading…",
+                fraction,
+                string.Join("  ·  ", parts)));
+            try
+            {
+                await Task.Delay(500, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>Removes what a cancelled or failed download left behind (the killed process may hold it briefly).</summary>
+    private static async Task DeletePartialAsync(string folder, string prefix)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var left = Directory.EnumerateFiles(folder, prefix + "*").ToList();
+            if (left.Count == 0)
+                return;
+            foreach (var f in left)
+                TryDelete(f);
+            await Task.Delay(300).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Real size of a file another process is writing (the directory entry lags behind until the
+    /// writer closes it, so read it through a handle).
+    /// </summary>
+    private static long SizeOf(string path)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return fs.Length;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    private static double? Num(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
 
     private static async Task<double> ProbeStartTimeAsync(string file, CancellationToken cancellationToken)
     {
@@ -143,7 +267,7 @@ public sealed partial class YouTubeImporter(string downloadDir)
         return double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var t) ? t : 0;
     }
 
-    private static async Task<string> RunYtDlpAsync(IReadOnlyList<string> args, IProgress<string>? progress, CancellationToken cancellationToken)
+    private static async Task<string> RunYtDlpAsync(IReadOnlyList<string> args, IProgress<ProgressInfo>? progress, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo(Tools.YtDlpPath)
         {
@@ -177,7 +301,8 @@ public sealed partial class YouTubeImporter(string downloadDir)
             {
                 stdout.AppendLine(line);
                 if (progress is not null && ProgressLine().Match(line) is { Success: true } m)
-                    progress.Report($"Downloading… {m.Groups[1].Value}%");
+                    progress.Report(new ProgressInfo($"Downloading… {m.Groups[1].Value}%",
+                        double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct) ? pct / 100 : null));
             }
         }, cancellationToken);
         var readErr = Task.Run(async () =>

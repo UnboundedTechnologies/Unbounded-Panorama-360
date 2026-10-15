@@ -35,7 +35,7 @@ public sealed class MediaPreparer
     public static bool IsImage(string path) => ImageExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
     /// <param name="overlayPng">Transparent PNG of the canvas size drawn over the background, or null.</param>
-    public async Task<PreparedMedia> PrepareAsync(BackgroundMedia media, Orientation orientation, string? overlayPng, IProgress<string>? progress, CancellationToken cancellationToken)
+    public async Task<PreparedMedia> PrepareAsync(BackgroundMedia media, Orientation orientation, string? overlayPng, IProgress<ProgressInfo>? progress, CancellationToken cancellationToken)
     {
         var source = media.SourcePath;
         if (source is not null && !File.Exists(source))
@@ -50,9 +50,17 @@ public sealed class MediaPreparer
 
         if (!File.Exists(stream) || new FileInfo(stream).Length == 0)
         {
-            progress?.Report("Converting background for the cooler…");
+            progress?.Report(new ProgressInfo("Converting background for the cooler…", 0));
+            var expected = await ExpectedSecondsAsync(media, cancellationToken).ConfigureAwait(false);
             var temp = stream + ".tmp";
-            await RunFfmpegAsync(BuildEncodeArgs(media, orientation, overlayPng, temp), cancellationToken).ConfigureAwait(false);
+            await RunFfmpegAsync(BuildEncodeArgs(media, orientation, overlayPng, temp), cancellationToken, seconds =>
+            {
+                var fraction = expected > 0 ? Math.Clamp(seconds / expected, 0, 1) : (double?)null;
+                progress?.Report(new ProgressInfo(
+                    fraction is { } f ? $"Converting background… {f:P0}" : "Converting background…",
+                    fraction,
+                    $"{seconds:0} s of {expected:0} s"));
+            }).ConfigureAwait(false);
             var size = new FileInfo(temp).Length;
             if (size == 0 || size > MaxPreparedBytes)
             {
@@ -187,7 +195,38 @@ public sealed class MediaPreparer
 
     private static string Seconds(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
 
-    public static async Task RunFfmpegAsync(IReadOnlyList<string> args, CancellationToken cancellationToken)
+    /// <summary>How many seconds of output the encode will produce (for the progress bar).</summary>
+    private static async Task<double> ExpectedSecondsAsync(BackgroundMedia media, CancellationToken cancellationToken)
+    {
+        if (media.SourcePath is not { } source)
+            return StillSeconds;
+        if (IsImage(source))
+            return media.DurationSeconds ?? 60;
+        var total = await ProbeDurationAsync(source, cancellationToken).ConfigureAwait(false);
+        var available = Math.Max(0, total - media.StartSeconds);
+        return media.DurationSeconds is { } d ? Math.Min(d, available > 0 ? available : d) : available;
+    }
+
+    /// <summary>Container duration in seconds (0 when unknown).</summary>
+    public static async Task<double> ProbeDurationAsync(string file, CancellationToken cancellationToken)
+    {
+        var psi = new ProcessStartInfo(Tools.FfprobePath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var a in new[] { "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file })
+            psi.ArgumentList.Add(a);
+        using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not start ffprobe.");
+        var text = await p.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        await p.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        return double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
+    }
+
+    /// <param name="onSeconds">Receives the output position in seconds as ffmpeg encodes (from -progress).</param>
+    public static async Task RunFfmpegAsync(IReadOnlyList<string> args, CancellationToken cancellationToken, Action<double>? onSeconds = null)
     {
         var psi = new ProcessStartInfo(Tools.FfmpegPath)
         {
@@ -196,15 +235,30 @@ public sealed class MediaPreparer
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (onSeconds is not null)
+        {
+            // Machine-readable progress on stdout ("out_time_us=…" every half second). Global options go first.
+            foreach (var a in new[] { "-progress", "pipe:1", "-stats_period", "0.5" })
+                psi.ArgumentList.Add(a);
+        }
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start ffmpeg.");
         var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        _ = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stdout = Task.Run(async () =>
+        {
+            while (await process.StandardOutput.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+            {
+                if (onSeconds is not null && line.StartsWith("out_time_us=", StringComparison.Ordinal)
+                    && long.TryParse(line.AsSpan("out_time_us=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var us) && us >= 0)
+                    onSeconds(us / 1_000_000.0);
+            }
+        }, cancellationToken);
         try
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            await stdout.ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

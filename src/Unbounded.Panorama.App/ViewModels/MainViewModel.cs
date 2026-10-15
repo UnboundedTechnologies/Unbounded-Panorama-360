@@ -75,6 +75,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string EngineDetail { get; set; } = "Starting…";
     [ObservableProperty] public partial string Status { get; set; } = "";
     [ObservableProperty] public partial bool IsBusy { get; set; }
+    [ObservableProperty] public partial double ProgressValue { get; set; }
+    [ObservableProperty] public partial bool ProgressIndeterminate { get; set; } = true;
+    [ObservableProperty] public partial string ProgressDetail { get; set; } = "";
     [ObservableProperty] public partial bool HasApplied { get; set; }
     [ObservableProperty] public partial string SensorFilter { get; set; } = "";
     [ObservableProperty] public partial string SensorTypeFilter { get; set; } = "All";
@@ -1256,9 +1259,19 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
         IsBusy = true;
+        ProgressIndeterminate = true;
+        ProgressValue = 0;
+        ProgressDetail = "";
         try
         {
-            var progress = new Progress<string>(s => Status = s);
+            // Created on the UI thread, so reports from the engine's worker threads are marshalled here.
+            var progress = new Progress<ProgressInfo>(p =>
+            {
+                Status = p.Text;
+                ProgressIndeterminate = p.Fraction is null;
+                ProgressValue = p.Fraction ?? 0;
+                ProgressDetail = p.Detail ?? "";
+            });
             var layout = BuildLayout();
             var overlay = includeBackground && layout.Background.DeviceFile is null ? RenderDrawingPng(layout) : null;
             await _engine.ApplyAsync(layout, includeBackground, overlay, progress);
@@ -1276,6 +1289,7 @@ public sealed partial class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            ProgressDetail = "";
         }
     }
 

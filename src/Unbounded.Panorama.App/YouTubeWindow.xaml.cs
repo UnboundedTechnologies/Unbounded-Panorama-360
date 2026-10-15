@@ -70,11 +70,13 @@ public partial class YouTubeWindow : Window
         _work?.Cancel();
         var cts = _work = new CancellationTokenSource();
         SetBusy(true, "Reading video information…");
+        ShowProgress("Reading video information…", null, "Asking YouTube for every available stream");
         RangePanel.IsEnabled = false;
         ImportButton.IsEnabled = false;
         try
         {
             var video = await Task.Run(() => _importer.ProbeAsync(url, cts.Token), cts.Token);
+            HideProgress();
             _video = video;
             TitleText.Text = video.Title;
             MetaText.Text = $"{video.Channel} · {YouTubeImporter.FormatTime(video.DurationSeconds)}";
@@ -98,11 +100,36 @@ public partial class YouTubeWindow : Window
         }
         catch (OperationCanceledException)
         {
+            HideProgress();
         }
         catch (Exception ex)
         {
+            HideProgress();
             SetBusy(false, ex.Message);
         }
+    }
+
+    private void ShowProgress(string title, double? fraction, string? detail)
+    {
+        ProgressPanel.Visibility = Visibility.Visible;
+        ProgressTitle.Text = title;
+        ProgressDetail.Text = detail ?? "";
+        Bar.IsIndeterminate = fraction is null;
+        if (fraction is { } f)
+        {
+            Bar.Value = Math.Clamp(f, 0, 1);
+            ProgressPercent.Text = $"{f:P0}";
+        }
+        else
+        {
+            ProgressPercent.Text = "";
+        }
+    }
+
+    private void HideProgress()
+    {
+        ProgressPanel.Visibility = Visibility.Collapsed;
+        Bar.IsIndeterminate = false;
     }
 
     private async Task LoadFrameAsync()
@@ -164,6 +191,8 @@ public partial class YouTubeWindow : Window
             return;
         StartBox.Text = YouTubeImporter.FormatTime(Math.Round(Start));
         LengthBox.Text = Math.Round(Length).ToString(CultureInfo.InvariantCulture);
+        if (_video is { } video && YouTubeImporter.EstimateBytes(video, Length) is { } bytes)
+            BestText.Text = $"Best available: {video.BestDescription}   ·   this section ≈ {bytes / 1048576.0:F0} MB";
     }
 
     private void OnStartBox(object sender, RoutedEventArgs e)
@@ -198,15 +227,17 @@ public partial class YouTubeWindow : Window
         _work?.Cancel();
         _frameWork?.Cancel();
         var cts = _work = new CancellationTokenSource();
-        SetBusy(true, "Downloading…");
+        SetBusy(true, "Downloading — you can cancel at any time.");
         RangePanel.IsEnabled = false;
         ImportButton.IsEnabled = false;
+        ShowProgress("Starting download…", null, "Connecting to YouTube");
         // Read the sliders here, on the UI thread; the download runs on a worker thread.
         var start = Start;
         var length = Length;
         try
         {
-            var progress = new Progress<string>(s => StatusText.Text = s);
+            // Progress<T> captures this (UI) thread, so updates are marshalled back here.
+            var progress = new Progress<ProgressInfo>(p => ShowProgress(p.Text, p.Fraction, p.Detail));
             Result = await Task.Run(() => _importer.DownloadAsync(video, start, length, progress, cts.Token), cts.Token);
             DialogResult = true;
         }
@@ -215,6 +246,7 @@ public partial class YouTubeWindow : Window
         }
         catch (Exception ex)
         {
+            HideProgress();
             SetBusy(false, ex.Message);
             RangePanel.IsEnabled = true;
             ImportButton.IsEnabled = true;

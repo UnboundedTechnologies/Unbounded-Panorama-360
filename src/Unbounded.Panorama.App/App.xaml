@@ -571,6 +571,54 @@
                 </Setter>
             </Style>
 
+            <!-- Progress bar: glowing gradient fill; indeterminate shows a sweeping highlight -->
+            <Style TargetType="ProgressBar">
+                <Setter Property="Height" Value="8" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="1" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Grid>
+                                <Border x:Name="PART_Track" CornerRadius="4" Background="#1FFFFFFF" />
+                                <Border x:Name="PART_Indicator" CornerRadius="4" HorizontalAlignment="Left" Background="{StaticResource AccentGradient}"
+                                        Effect="{StaticResource Glow}" />
+                                <Grid x:Name="Sweep" ClipToBounds="True" Visibility="Collapsed">
+                                    <Border Width="120" HorizontalAlignment="Left" CornerRadius="4">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#0000E5FF" Offset="0" />
+                                                <GradientStop Color="#FF00E5FF" Offset="0.5" />
+                                                <GradientStop Color="#008B5CF6" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <Border.RenderTransform>
+                                            <TranslateTransform x:Name="SweepX" X="-120" />
+                                        </Border.RenderTransform>
+                                    </Border>
+                                </Grid>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsIndeterminate" Value="True">
+                                    <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
+                                    <Setter TargetName="Sweep" Property="Visibility" Value="Visible" />
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard x:Name="SweepAnim">
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="SweepX" Storyboard.TargetProperty="X" From="-120" To="900" Duration="0:0:1.4" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="SweepAnim" />
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style x:Key="WidgetListItem" TargetType="ListBoxItem">
                 <Setter Property="Foreground" Value="{StaticResource Fg}" />
                 <Setter Property="Template">
