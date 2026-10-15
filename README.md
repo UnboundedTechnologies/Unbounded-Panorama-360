@@ -22,14 +22,16 @@ Frames are `"TRYX"` + little-endian `uint32` length + a protobuf message (`src/U
 
 ## Install
 
-Requires the .NET 10 SDK, FFmpeg and yt-dlp (for YouTube import) on Windows:
+Run `UnboundedPanorama360-Setup-<version>.exe`. It installs to `Program Files\Unbounded Panorama 360` (.NET is included), asks whether to start with Windows, and installs what the app needs through winget only when it is missing: FFmpeg (video conversion), yt-dlp and Deno (YouTube import) and the PawnIO driver (CPU temperature, clocks and power). Running a newer setup closes the running app and updates it in place. Uninstall from Windows Settings, Apps.
+
+The app asks for administrator rights because CPU sensors are read through a kernel driver (like HWiNFO). "Start with Windows" uses a scheduled task, so there is no prompt at login.
+
+To build the setup yourself (needs the .NET 10 SDK and Inno Setup 6):
 
 ```powershell
-winget install Microsoft.DotNet.SDK.10 Gyan.FFmpeg yt-dlp.yt-dlp
-.\install.ps1            # add -Desktop for a desktop shortcut
+winget install Microsoft.DotNet.SDK.10 JRSoftware.InnoSetup
+.\build-installer.ps1        # writes dist\UnboundedPanorama360-Setup-<version>.exe; -Run starts it
 ```
-
-`install.ps1` builds the app into `%LocalAppData%\Programs\UnboundedPanorama360\app-<timestamp>`, points the `current` link at it, adds a Start Menu shortcut and starts the new version, which takes over from a running copy. Run it again to update. The app asks for administrator rights because CPU temperature, clocks and power are read through a kernel driver (like HWiNFO). "Start with Windows" uses a scheduled task, so there is no prompt at login.
 
 ## Build
 
