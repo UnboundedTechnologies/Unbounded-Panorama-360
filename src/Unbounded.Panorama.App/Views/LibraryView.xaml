@@ -192,10 +192,21 @@
                                                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center" />
                                                     </Border.Background>
                                                 </Border>
+                                                <!-- This app's uploads loop the stream that was sent -->
+                                                <Border controls:LoopingVideo.Source="{Binding Clip}" />
+                                                <TextBlock Text="Stored on the cooler only: no preview" Visibility="{Binding NoPreview, Converter={StaticResource Visible}}"
+                                                           Foreground="{StaticResource Muted}" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14" />
                                             </Grid>
                                         </Border>
                                         <Border Style="{StaticResource Pill}">
                                             <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Accent}" />
+                                        </Border>
+                                        <Border Style="{StaticResource Pill}" VerticalAlignment="Bottom" Visibility="{Binding HasLocalCopy, Converter={StaticResource Visible}}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE768;" FontFamily="{StaticResource Icons}" FontSize="10" Foreground="{StaticResource Accent}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding DurationText}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11"
+                                                           Foreground="{StaticResource Fg}" Margin="5,0,0,0" VerticalAlignment="Center" />
+                                            </StackPanel>
                                         </Border>
                                     </Grid>
                                     <StackPanel Margin="14,12,14,14">

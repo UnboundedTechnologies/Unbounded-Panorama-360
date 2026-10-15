@@ -67,7 +67,7 @@ Type: filesandordirs; Name: "{app}\setup"
 [Code]
 const
   QuitScript = 'try { $e = [Threading.EventWaitHandle]::OpenExisting(''UnboundedPanorama360.SingleInstance.Quit''); [void]$e.Set() } catch { } ' +
-               'Wait-Process -Name UnboundedPanorama360 -Timeout 30 -ErrorAction SilentlyContinue; ' +
+               'Wait-Process -Name UnboundedPanorama360 -Timeout 150 -ErrorAction SilentlyContinue; ' +
                'if (Get-Process -Name UnboundedPanorama360 -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }';
 
 function PowerShell(const Args: String; var ResultCode: Integer): Boolean;
@@ -76,7 +76,8 @@ begin
     '-NoProfile -ExecutionPolicy Bypass ' + Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
-{ Close a running copy cleanly (it closes its USB session first) before files are replaced. }
+{ Close a running copy cleanly before files are replaced. It stops a conversion at once, lets an upload to
+  the cooler finish (at most ~2 minutes) and closes its USB session; the app itself never takes longer. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Code: Integer;

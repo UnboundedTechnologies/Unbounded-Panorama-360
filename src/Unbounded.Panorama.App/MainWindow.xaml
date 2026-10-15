@@ -127,7 +127,7 @@
                     </StackPanel>
 
                     <Grid Grid.Column="1">
-                        <views:StudioView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Studio}" />
+                        <views:StudioView x:Name="Studio" Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Studio}" />
                         <views:LibraryView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Library}" />
                         <views:SettingsView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Settings}" />
                     </Grid>

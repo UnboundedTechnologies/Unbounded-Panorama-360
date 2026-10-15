@@ -87,6 +87,44 @@ public class ColorPickerTests
     }
 
     [Fact]
+    public void Area_picker_loads_and_its_keys_choose_the_place()
+    {
+        OnSta(() =>
+        {
+            foreach (var (key, expected) in new[] { (System.Windows.Input.Key.W, Layout.ScreenArea.Whole), (System.Windows.Input.Key.T, Layout.ScreenArea.TopFace), (System.Windows.Input.Key.F, Layout.ScreenArea.FrontFace) })
+            {
+                var window = new Unbounded.Panorama.App.AreaPickerWindow("clip.mp4");
+                var content = (FrameworkElement)window.Content;
+                window.Content = null; // render the content on its own (the window is never shown)
+                content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                content.Arrange(new Rect(content.DesiredSize));
+                content.UpdateLayout();
+                if (key == System.Windows.Input.Key.W && Environment.GetEnvironmentVariable("UPN360_RENDER") is { Length: > 0 } dir)
+                {
+                    var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(content);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    using var file = File.Create(Path.Combine(dir, "area-picker.png"));
+                    encoder.Save(file);
+                }
+                // The key handler records the choice (DialogResult itself needs a shown dialog).
+                var handler = typeof(Unbounded.Panorama.App.AreaPickerWindow).GetMethod("OnKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                try
+                {
+                    handler.Invoke(window, [window, new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero), 0, key)]);
+                }
+                catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is InvalidOperationException)
+                {
+                    // Setting DialogResult on a window that was never shown as a dialog throws after Result is set.
+                }
+                Assert.Equal(expected, window.Result);
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Compact_hides_the_hex_box()
     {
         OnSta(() =>

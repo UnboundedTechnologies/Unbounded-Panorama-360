@@ -5,6 +5,14 @@
              xmlns:layout="clr-namespace:Unbounded.Panorama.Layout;assembly=Unbounded.Panorama.Core"
              xmlns:controls="clr-namespace:Unbounded.Panorama.App.Controls">
     <UserControl.Resources>
+        <Style x:Key="DropHint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="54" />
+            <Setter Property="FontFamily" Value="{StaticResource Display}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#88FFFFFF" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
         <DataTemplate x:Key="EnumItem">
             <TextBlock Text="{Binding Converter={StaticResource EnumLabel}}" />
         </DataTemplate>
@@ -84,6 +92,21 @@
                             <TextBlock Text="BACKGROUND" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
                         </DockPanel>
                         <TextBlock Text="{Binding BackgroundName}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,6,0,10" />
+                        <!-- Top and front each have their own media: which one is being edited -->
+                        <Border Visibility="{Binding HasOther, Converter={StaticResource Visible}}" CornerRadius="10" Background="#1400E5FF"
+                                BorderBrush="{StaticResource LineHover}" BorderThickness="1" Padding="10,8" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock FontSize="11.5" Foreground="{StaticResource Muted}" TextWrapping="Wrap">
+                                    <Run Text="Editing the" /> <Run Text="{Binding ActiveFaceName, Mode=OneWay}" Foreground="{StaticResource Accent}" FontWeight="SemiBold" /><Run Text=". The" />
+                                    <Run Text="{Binding OtherFaceName, Mode=OneWay}" Foreground="#A78BFA" FontWeight="SemiBold" /> <Run Text="shows" />
+                                    <Run Text="{Binding OtherName, Mode=OneWay}" Foreground="{StaticResource Fg}" /><Run Text="." />
+                                </TextBlock>
+                                <WrapPanel Margin="0,6,0,0">
+                                    <Button Content="Edit the other face" Style="{StaticResource Chip}" Command="{Binding EditOtherMediaCommand}" />
+                                    <Button Content="Remove it" Style="{StaticResource Chip}" Command="{Binding RemoveOtherMediaCommand}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
                         <WrapPanel>
                             <Button Content="Choose file…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
                             <Button Content="YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
@@ -479,6 +502,18 @@
                                                   Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
                                                   Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}" />
                                 </Canvas>
+                                <!-- The other face's media (top and front can each have their own) -->
+                                <Canvas IsHitTestVisible="False" Visibility="{Binding HasOther, Converter={StaticResource Visible}}">
+                                    <Canvas.Clip>
+                                        <RectangleGeometry Rect="{Binding OtherAreaRect}" />
+                                    </Canvas.Clip>
+                                    <Image Source="{Binding OtherFrame}" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"
+                                           Canvas.Left="{Binding OtherRect.X}" Canvas.Top="{Binding OtherRect.Y}" Width="{Binding OtherRect.Width}" Height="{Binding OtherRect.Height}" />
+                                    <MediaElement x:Name="OtherPlayer" Stretch="Fill" LoadedBehavior="Manual" UnloadedBehavior="Close" IsMuted="True"
+                                                  MediaOpened="OnClipOpened" MediaEnded="OnClipEnded" MediaFailed="OnClipFailed"
+                                                  RenderOptions.BitmapScalingMode="HighQuality"
+                                                  Canvas.Left="{Binding OtherRect.X}" Canvas.Top="{Binding OtherRect.Y}" Width="{Binding OtherRect.Width}" Height="{Binding OtherRect.Height}" />
+                                </Canvas>
 
                                 <Grid IsHitTestVisible="False" Visibility="{Binding IsPortrait, Converter={StaticResource Visible}}">
                                     <Grid Visibility="{Binding ShowCurveGuide, Converter={StaticResource Visible}}">
@@ -557,6 +592,14 @@
                                 <Canvas IsHitTestVisible="False" Visibility="{Binding EditorMode, Converter={StaticResource IsVisible}, ConverterParameter=Background}">
                                     <Rectangle Canvas.Left="{Binding AreaRect.X}" Canvas.Top="{Binding AreaRect.Y}" Width="{Binding AreaRect.Width}" Height="{Binding AreaRect.Height}"
                                                Stroke="#AA3DDC97" StrokeThickness="4" StrokeDashArray="6 4" />
+                                    <!-- The other face: click it to edit its media -->
+                                    <Grid Canvas.Left="{Binding OtherAreaRect.X}" Canvas.Top="{Binding OtherAreaRect.Y}" Width="{Binding OtherAreaRect.Width}" Height="{Binding OtherAreaRect.Height}"
+                                          Visibility="{Binding HasOther, Converter={StaticResource Visible}}">
+                                        <Rectangle Stroke="#99A78BFA" StrokeThickness="4" StrokeDashArray="6 4" />
+                                        <Border Background="#CC0B111E" CornerRadius="24" Padding="26,10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock Text="Click to edit this face" FontSize="38" Foreground="#A78BFA" FontFamily="{StaticResource Display}" FontWeight="SemiBold" />
+                                        </Border>
+                                    </Grid>
                                     <Rectangle Canvas.Left="{Binding MediaX, FallbackValue=0, TargetNullValue=0}" Canvas.Top="{Binding MediaY, FallbackValue=0, TargetNullValue=0}"
                                                Width="{Binding MediaWidth, FallbackValue=0, TargetNullValue=0}" Height="{Binding MediaHeight}"
                                                Stroke="#00E5FF" StrokeThickness="4" Fill="#0A00E5FF" />
@@ -569,6 +612,28 @@
                                 <Canvas IsHitTestVisible="False">
                                     <Rectangle x:Name="Marquee" Visibility="Collapsed" Fill="#2200E5FF" Stroke="#00E5FF" StrokeThickness="3" StrokeDashArray="4 3" />
                                 </Canvas>
+
+                                <!-- Drop targets while a file is dragged over the window (see StudioView.ShowDropTarget) -->
+                                <Grid x:Name="DropLayer" IsHitTestVisible="False" Visibility="Collapsed" Background="#99000000">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition />
+                                        <RowDefinition />
+                                        <RowDefinition />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock x:Name="DropHintTop" Text="TOP FACE" Grid.Row="0" Style="{StaticResource DropHint}" />
+                                    <TextBlock x:Name="DropHintWhole" Text="WHOLE SCREEN" Grid.Row="1" Style="{StaticResource DropHint}" />
+                                    <TextBlock x:Name="DropHintFront" Text="FRONT FACE" Grid.Row="2" Style="{StaticResource DropHint}" />
+                                    <Canvas Grid.RowSpan="3">
+                                        <Border x:Name="DropTarget" BorderBrush="{StaticResource Accent}" BorderThickness="8" Background="#4000E5FF" CornerRadius="24">
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="&#xE896;" FontFamily="{StaticResource Icons}" FontSize="110" Foreground="White" HorizontalAlignment="Center" />
+                                                <TextBlock x:Name="DropTargetText" FontSize="76" FontFamily="{StaticResource Display}" FontWeight="Bold" Foreground="White"
+                                                           HorizontalAlignment="Center" Margin="0,12,0,0" />
+                                                <TextBlock Text="Release to put it here" FontSize="40" Foreground="#CCFFFFFF" HorizontalAlignment="Center" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Canvas>
+                                </Grid>
                             </Grid>
                         </Border>
                     </Border>

@@ -192,12 +192,26 @@ public partial class App : Application
         if (_exiting)
             return;
         _exiting = true;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var steps = new List<string>();
+        void Step(string name)
+        {
+            lock (steps)
+                steps.Add($"{name} {clock.ElapsedMilliseconds} ms");
+        }
+        StartExitWatchdog(steps);
+
         _viewModel?.Shutdown();
+        Step("saved");
         _tray?.Dispose();
         _window?.Close();
+        Step("window closed");
         if (_engine is not null)
-            await _engine.DisposeAsync(); // closes the USB session
+            await _engine.DisposeAsync(); // stops a conversion, lets an upload finish, closes the USB session
+        Step("cooler closed");
         _sensors?.Dispose();
+        Step("sensors closed");
+        WriteShutdownLog(steps);
         _showSignal?.Set();
         // Only now let a replacing copy take over: the cooler is free.
         try
@@ -209,6 +223,49 @@ public partial class App : Application
             // Not owned on this thread (should not happen); the OS releases it at exit anyway.
         }
         Shutdown();
+    }
+
+    /// <summary>
+    /// Exiting must never hang (setup and the uninstaller wait for it): after 15 s the process ends
+    /// anyway, unless an upload to the cooler is still running, which is allowed to finish first.
+    /// The cooler keeps its configuration, and the next start reconnects.
+    /// </summary>
+    private void StartExitWatchdog(List<string> steps)
+    {
+        var engine = _engine;
+        var thread = new Thread(() =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(15));
+            var waited = 0;
+            while (engine?.IsUploading == true && waited < 120)
+            {
+                Thread.Sleep(1000);
+                waited++;
+            }
+            lock (steps)
+                steps.Add("forced exit (a step did not finish)");
+            WriteShutdownLog(steps);
+            Environment.Exit(0);
+        }) { IsBackground = true };
+        thread.Start();
+    }
+
+    /// <summary>How long each exit step took (last 50 exits), to find any slow step.</summary>
+    private static void WriteShutdownLog(List<string> steps)
+    {
+        try
+        {
+            string line;
+            lock (steps)
+                line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {string.Join(", ", steps)}";
+            var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnboundedPanorama360", "shutdown.log");
+            var lines = System.IO.File.Exists(path) ? System.IO.File.ReadAllLines(path).ToList() : [];
+            lines.Add(line);
+            System.IO.File.WriteAllLines(path, lines.TakeLast(50));
+        }
+        catch (System.IO.IOException)
+        {
+        }
     }
 
     private bool _showingError;

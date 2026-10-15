@@ -270,25 +270,64 @@ public sealed partial class MainViewModel : ObservableObject
         Orientation = Orientation,
         Brightness = Brightness,
         Fahrenheit = Fahrenheit,
-        Background = new BackgroundMedia
-        {
-            SourcePath = BackgroundPath,
-            Fit = BackgroundFit,
-            CropX = CropX,
-            CropY = CropY,
-            StartSeconds = StartSeconds,
-            DurationSeconds = DurationSeconds,
-            DeviceFile = BackgroundDeviceFile,
-            SourceWidth = SourceWidth,
-            SourceHeight = SourceHeight,
-            MediaX = MediaX,
-            MediaY = MediaY,
-            MediaWidth = MediaWidth,
-            Area = Area,
-        },
+        Background = BuildBackground(),
+        SecondBackground = _other is null ? null : Copy(_other),
         Widgets = Widgets.Select(w => w.ToModel()).ToList(),
         Drawing = Drawing,
     };
+
+    /// <summary>The media being edited (the Background panel and BACKGROUND mode work on this one).</summary>
+    private BackgroundMedia BuildBackground() => new()
+    {
+        SourcePath = BackgroundPath,
+        Fit = BackgroundFit,
+        CropX = CropX,
+        CropY = CropY,
+        StartSeconds = StartSeconds,
+        DurationSeconds = DurationSeconds,
+        DeviceFile = BackgroundDeviceFile,
+        SourceWidth = SourceWidth,
+        SourceHeight = SourceHeight,
+        MediaX = MediaX,
+        MediaY = MediaY,
+        MediaWidth = MediaWidth,
+        Area = Area,
+    };
+
+    private static BackgroundMedia Copy(BackgroundMedia m) => new()
+    {
+        SourcePath = m.SourcePath,
+        Fit = m.Fit,
+        CropX = m.CropX,
+        CropY = m.CropY,
+        StartSeconds = m.StartSeconds,
+        DurationSeconds = m.DurationSeconds,
+        DeviceFile = m.DeviceFile,
+        SourceWidth = m.SourceWidth,
+        SourceHeight = m.SourceHeight,
+        MediaX = m.MediaX,
+        MediaY = m.MediaY,
+        MediaWidth = m.MediaWidth,
+        Area = m.Area,
+    };
+
+    /// <summary>Makes a media the one being edited. Call with <see cref="_loading"/> set.</summary>
+    private void ApplyMedia(BackgroundMedia m)
+    {
+        BackgroundPath = m.SourcePath;
+        BackgroundFit = m.Fit;
+        CropX = m.CropX;
+        CropY = m.CropY;
+        StartSeconds = m.StartSeconds;
+        DurationSeconds = m.DurationSeconds;
+        BackgroundDeviceFile = m.DeviceFile;
+        SourceWidth = m.SourceWidth;
+        SourceHeight = m.SourceHeight;
+        MediaX = m.MediaX;
+        MediaY = m.MediaY;
+        MediaWidth = m.MediaWidth;
+        Area = m.Area;
+    }
 
     private void Load(ScreenLayout layout, bool keepSelection)
     {
@@ -299,19 +338,7 @@ public sealed partial class MainViewModel : ObservableObject
             Orientation = layout.Orientation;
             Brightness = layout.Brightness;
             Fahrenheit = layout.Fahrenheit;
-            BackgroundPath = layout.Background.SourcePath;
-            BackgroundFit = layout.Background.Fit;
-            CropX = layout.Background.CropX;
-            CropY = layout.Background.CropY;
-            StartSeconds = layout.Background.StartSeconds;
-            DurationSeconds = layout.Background.DurationSeconds;
-            BackgroundDeviceFile = layout.Background.DeviceFile;
-            SourceWidth = layout.Background.SourceWidth;
-            SourceHeight = layout.Background.SourceHeight;
-            MediaX = layout.Background.MediaX;
-            MediaY = layout.Background.MediaY;
-            MediaWidth = layout.Background.MediaWidth;
-            Area = layout.Background.Area;
+            ApplyMedia(layout.Background);
             if (Drawing != layout.Drawing)
             {
                 Drawing = layout.Drawing;
@@ -335,7 +362,9 @@ public sealed partial class MainViewModel : ObservableObject
         }
         NotifyCounts();
         RefreshPreviews();
+        SetOther(layout.SecondBackground, edited: false);
         NotifyPlacement();
+        SchedulePreconvert(); // undo, presets and start-up change the design too
         var key = BackgroundKey();
         if (key != _backgroundKey)
         {
@@ -356,6 +385,7 @@ public sealed partial class MainViewModel : ObservableObject
             nameof(IsAreaWhole), nameof(IsAreaTop), nameof(IsAreaFront),
         })
             OnPropertyChanged(name);
+        NotifyOther();
     }
 
     partial void OnMediaXChanged(double? value) => PlacementEdited();
@@ -369,8 +399,228 @@ public sealed partial class MainViewModel : ObservableObject
         NotifyPlacement();
         if (_loading)
             return;
+        if (_other is { } other)
+        {
+            if (value == ScreenArea.Whole)
+            {
+                // The whole screen covers the other face's media.
+                SetOther(null, edited: true);
+            }
+            else if (other.Area == value)
+            {
+                // Moving onto the other media's face swaps the two faces.
+                other.Area = Placement.Opposite(value);
+                Refill(other);
+                NotifyOther();
+            }
+        }
         // Choosing an area fills it, so "show it only on the top face" is one click.
         FillArea();
+    }
+
+    // ================================================================== second media (the other face)
+
+    /// <summary>
+    /// Portrait: the media on the other face, kept while the one in the Background panel is edited
+    /// and sent together with it (see <see cref="ScreenLayout.SecondBackground"/>).
+    /// </summary>
+    private BackgroundMedia? _other;
+
+    [ObservableProperty] public partial ImageSource? OtherFrame { get; set; }
+    [ObservableProperty] public partial Uri? OtherClip { get; set; }
+    private string _otherFrameKey = "";
+    private string _otherClipKey = "";
+    private CancellationTokenSource? _otherCts;
+
+    /// <summary>The other media when it is shown: portrait, on the face opposite the edited one.</summary>
+    private BackgroundMedia? ShownOther => _other is null ? null : Placement.Pairable(BuildBackground(), _other, Orientation);
+
+    public bool HasOther => ShownOther is not null;
+    public System.Windows.Rect OtherRect => ShownOther is { } o
+        ? new System.Windows.Rect(o.MediaX!.Value, o.MediaY!.Value, o.MediaWidth!.Value, o.MediaHeight)
+        : new System.Windows.Rect(0, 0, 0, 0);
+    public System.Windows.Rect OtherAreaRect => ShownOther is { } o
+        ? ToRect(Placement.AreaBox(o.Area, Orientation))
+        : new System.Windows.Rect(0, 0, 0, 0);
+    public string OtherName => _other?.SourcePath is { } p ? Path.GetFileName(p) : "";
+    public string OtherFaceName => FaceName(_other?.Area ?? ScreenArea.Whole);
+    public string ActiveFaceName => FaceName(Area);
+
+    public static string FaceName(ScreenArea area) => area switch
+    {
+        ScreenArea.TopFace => "top face",
+        ScreenArea.FrontFace => "front face",
+        _ => "whole screen",
+    };
+
+    private static System.Windows.Rect ToRect(Box b) => new(b.X, b.Y, b.W, b.H);
+
+    private void NotifyOther()
+    {
+        foreach (var name in new[] { nameof(HasOther), nameof(OtherRect), nameof(OtherAreaRect), nameof(OtherName), nameof(OtherFaceName), nameof(ActiveFaceName) })
+            OnPropertyChanged(name);
+    }
+
+    private void SetOther(BackgroundMedia? media, bool edited)
+    {
+        if (media is null && _other is null)
+            return;
+        _other = media;
+        if (media is null)
+        {
+            // (A different media cancels the running preview itself, in EnsureOtherPreviewAsync; the
+            // same media reloaded, e.g. by undo, must not lose a preview that is still being made.)
+            _otherCts?.Cancel();
+            OtherFrame = null;
+            OtherClip = null;
+            _otherFrameKey = "";
+            _otherClipKey = "";
+        }
+        NotifyOther();
+        if (media is not null)
+            _ = EnsureOtherPreviewAsync();
+        if (edited)
+        {
+            BackgroundDirty = true;
+            OnLayoutChanged(needsConfig: false);
+        }
+    }
+
+    /// <summary>Fills a media's own area again (after it moved to another face).</summary>
+    private void Refill(BackgroundMedia m) => Placement.FillOwnArea(m, Orientation);
+
+    /// <summary>Makes room for a new media on <paramref name="target"/> (rules: <see cref="Placement.MakeRoom"/>).</summary>
+    private void PrepareSlot(ScreenArea target)
+    {
+        var current = HasBackground && BackgroundDeviceFile is null ? BuildBackground() : null;
+        var stays = Placement.MakeRoom(current, _other, target, Orientation);
+        if (stays is null)
+        {
+            SetOther(null, edited: false);
+            return;
+        }
+        if (ReferenceEquals(stays, _other))
+            return; // the other face keeps its media
+        // The current media now lives on the other face (whatever was on the target face goes).
+        _otherCts?.Cancel();
+        _other = stays;
+        OtherFrame = SourceFrame;
+        _otherFrameKey = SourceFrame is null ? "" : _sourceFrameKey;
+        OtherClip = SourceClip;
+        _otherClipKey = SourceClip is null ? "" : _clipKey;
+        NotifyOther();
+        _ = EnsureOtherPreviewAsync();
+    }
+
+    /// <summary>Switches editing to the other face's media (the current one stays on its face).</summary>
+    [RelayCommand]
+    private void EditOtherMedia()
+    {
+        if (_other is not { } other)
+            return;
+        var current = BuildBackground();
+        _clipCts?.Cancel();
+        _otherCts?.Cancel();
+        _other = current;
+        _loading = true;
+        try
+        {
+            ApplyMedia(other);
+        }
+        finally
+        {
+            _loading = false;
+        }
+        (SourceFrame, OtherFrame) = (OtherFrame, SourceFrame);
+        (_sourceFrameKey, _otherFrameKey) = (_otherFrameKey, _sourceFrameKey);
+        (SourceClip, OtherClip) = (OtherClip, SourceClip);
+        (_clipKey, _otherClipKey) = (_otherClipKey, _clipKey);
+        // Anything still being prepared is started again for its new place (finished copies are cached).
+        if (SourceFrame is null) _sourceFrameKey = "";
+        if (OtherFrame is null) _otherFrameKey = "";
+        if (SourceClip is null) _clipKey = "";
+        if (OtherClip is null) _otherClipKey = "";
+        ClipStatus = "";
+        OnPropertyChanged(nameof(HasBackground));
+        OnPropertyChanged(nameof(IsVideoBackground));
+        OnPropertyChanged(nameof(BackgroundName));
+        NotifyPlacement();
+        _backgroundKey = BackgroundKey();
+        _ = RenderBackgroundPreviewAsync();
+        _ = EnsurePlacementAsync();
+        _ = EnsureOtherPreviewAsync();
+        Status = $"Editing the {ActiveFaceName} media.";
+    }
+
+    [RelayCommand]
+    private void RemoveOtherMedia()
+    {
+        var face = OtherFaceName;
+        SetOther(null, edited: true);
+        Status = $"Removed the {face} media.";
+    }
+
+    /// <summary>Still and looping clip of the other face's media for the canvas.</summary>
+    private async Task EnsureOtherPreviewAsync()
+    {
+        var other = _other;
+        if (other?.SourcePath is not { } path || !File.Exists(path))
+        {
+            OtherFrame = null;
+            OtherClip = null;
+            return;
+        }
+        var frameKey = $"{path}|{other.StartSeconds}";
+        if (frameKey != _otherFrameKey)
+        {
+            _otherFrameKey = frameKey;
+            var png = Path.Combine(_storage.PreviewDir, $"source-{Guid.NewGuid():N}.png");
+            try
+            {
+                var start = other.StartSeconds + 0.5;
+                await Task.Run(() => MediaPreparer.RenderSourceFrameAsync(path, start, png, CancellationToken.None));
+                if (frameKey == _otherFrameKey)
+                    OtherFrame = LoadImage(png);
+            }
+            catch (Exception ex)
+            {
+                AddLog("Could not read the other face's media: " + ex.Message);
+            }
+            finally
+            {
+                try { File.Delete(png); } catch { }
+            }
+        }
+        if (MediaPreparer.IsImage(path))
+        {
+            OtherClip = null;
+            _otherClipKey = "";
+            return;
+        }
+        var key = ClipKey(path, other.StartSeconds, other.DurationSeconds);
+        if (key == _otherClipKey)
+            return;
+        _otherCts?.Cancel();
+        _otherClipKey = key;
+        var cts = _otherCts = new CancellationTokenSource();
+        try
+        {
+            var file = await MakePreviewClipAsync(path, other.StartSeconds, other.DurationSeconds, key, null, cts.Token);
+            if (key == _otherClipKey && !cts.IsCancellationRequested)
+            {
+                OtherClip = new Uri(file);
+                PruneClips();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (key == _otherClipKey)
+                _otherClipKey = "";
+            AddLog("Video preview unavailable for the other face (its still is shown): " + ex.Message);
+        }
     }
 
     private void PlacementEdited()
@@ -563,7 +813,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// Makes the editor play the background as the cooler will: the same start and length, looped.
     /// The still frame stays visible while the copy is made; copies are cached by source, start and
-    /// length, and only the current one is kept.
+    /// length, and only the ones on screen are kept.
     /// </summary>
     private async Task EnsurePreviewClipAsync(string path)
     {
@@ -574,56 +824,83 @@ public sealed partial class MainViewModel : ObservableObject
         }
         var start = StartSeconds;
         var duration = DurationSeconds;
-        var key = $"{path}|{File.GetLastWriteTimeUtc(path).Ticks}|{start.ToString(CultureInfo.InvariantCulture)}|{duration?.ToString(CultureInfo.InvariantCulture)}";
+        var key = ClipKey(path, start, duration);
         if (key == _clipKey)
             return;
         _clipCts?.Cancel();
         _clipKey = key;
         var cts = _clipCts = new CancellationTokenSource();
-        var name = "clip-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)), 0, 8) + ".mp4";
-        var file = Path.Combine(_storage.PreviewDir, name);
-        var part = file + ".part";
         try
         {
-            if (!File.Exists(file))
-            {
+            if (!File.Exists(ClipFile(key)))
                 SourceClip = null;
-                // Start and length are often typed digit by digit; wait for the value to settle.
-                await Task.Delay(600, cts.Token);
-                ClipStatus = "Preparing the video preview…";
-                var expected = duration ?? Math.Max(0, await Task.Run(() => MediaPreparer.ProbeDurationAsync(path, cts.Token)) - start);
-                await Task.Run(() => MediaPreparer.RenderPreviewClipAsync(path, start, duration, part, cts.Token, seconds =>
-                    _ui.BeginInvoke(() =>
-                    {
-                        if (!cts.IsCancellationRequested && expected > 0)
-                            ClipStatus = $"Preparing the video preview… {Math.Clamp(seconds / expected, 0, 1):P0}";
-                    })));
-                File.Move(part, file, overwrite: true);
-            }
-            if (cts.IsCancellationRequested)
+            var file = await MakePreviewClipAsync(path, start, duration, key, text =>
+            {
+                if (!cts.IsCancellationRequested)
+                    ClipStatus = text;
+            }, cts.Token);
+            if (cts.IsCancellationRequested || key != _clipKey)
                 return;
             ClipStatus = "";
             SourceClip = new Uri(file);
-            // Keep only the current copy (the previous one may still be open in the player; it goes next time).
-            foreach (var old in Directory.EnumerateFiles(_storage.PreviewDir, "clip-*"))
-            {
-                if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase))
-                    try { File.Delete(old); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            }
+            PruneClips();
         }
         catch (OperationCanceledException)
         {
-            try { File.Delete(part); } catch { }
         }
         catch (Exception ex)
         {
-            try { File.Delete(part); } catch { }
             if (!cts.IsCancellationRequested)
             {
                 ClipStatus = "";
                 _clipKey = "";
                 AddLog("Video preview unavailable (the still frame is shown): " + ex.Message);
             }
+        }
+    }
+
+    private static string ClipKey(string path, double start, double? duration) =>
+        $"{path}|{File.GetLastWriteTimeUtc(path).Ticks}|{start.ToString(CultureInfo.InvariantCulture)}|{duration?.ToString(CultureInfo.InvariantCulture)}";
+
+    private string ClipFile(string key) => Path.Combine(_storage.PreviewDir,
+        "clip-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)), 0, 8) + ".mp4");
+
+    /// <summary>Returns the cached preview copy for this clip, making it first if needed.</summary>
+    private async Task<string> MakePreviewClipAsync(string path, double start, double? duration, string key, Action<string>? status, CancellationToken token)
+    {
+        var file = ClipFile(key);
+        if (File.Exists(file))
+            return file;
+        var part = file + ".part";
+        try
+        {
+            // Start and length are often typed digit by digit; wait for the value to settle.
+            await Task.Delay(600, token);
+            status?.Invoke("Preparing the video preview…");
+            var expected = duration ?? Math.Max(0, await Task.Run(() => MediaPreparer.ProbeDurationAsync(path, token)) - start);
+            await Task.Run(() => MediaPreparer.RenderPreviewClipAsync(path, start, duration, part, token, seconds =>
+                _ui.BeginInvoke(() =>
+                {
+                    if (expected > 0)
+                        status?.Invoke($"Preparing the video preview… {Math.Clamp(seconds / expected, 0, 1):P0}");
+                })));
+            File.Move(part, file, overwrite: true);
+            return file;
+        }
+        finally
+        {
+            try { File.Delete(part); } catch { }
+        }
+    }
+
+    /// <summary>Keeps only the copies on screen (a replaced one may still be open in the player; it goes next time).</summary>
+    private void PruneClips()
+    {
+        var keep = new[] { SourceClip?.LocalPath, OtherClip?.LocalPath };
+        foreach (var old in Directory.EnumerateFiles(_storage.PreviewDir, "clip-*.mp4"))
+        {
+            if (!keep.Any(k => string.Equals(k, old, StringComparison.OrdinalIgnoreCase)))
+                try { File.Delete(old); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
     }
 
@@ -657,11 +934,76 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         _commitDebounce.Stop();
         _commitDebounce.Start();
+        SchedulePreconvert();
         if (HasApplied && IsConnected)
         {
             _liveNeedsConfig |= needsConfig;
             _liveDebounce.Stop();
             _liveDebounce.Start();
+        }
+    }
+
+    // ================================================================== background conversion
+
+    private DispatcherTimer? _preconvertDebounce;
+    private string? _preconvertKey;
+
+    /// <summary>Converts the design for the cooler 3 s after the last change, so Apply only has to upload.</summary>
+    private void SchedulePreconvert()
+    {
+        _preconvertDebounce ??= new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
+        {
+            _preconvertDebounce!.Stop();
+            _ = PreconvertAsync();
+        }, _ui) { IsEnabled = false };
+        _preconvertDebounce.Stop();
+        _preconvertDebounce.Start();
+    }
+
+    /// <summary>
+    /// Starts converting the current design at low priority. A design already converted (or being
+    /// converted) is left alone, so edits that do not touch the video (text, sensors) cost nothing;
+    /// a changed design stops the previous background run. Apply joins a run in progress.
+    /// </summary>
+    private async Task PreconvertAsync()
+    {
+        if (IsBusy)
+            return; // an Apply is converting already
+        var layout = BuildLayout();
+        if (layout.Background.DeviceFile is not null)
+            return;
+        string key;
+        string? overlay;
+        try
+        {
+            overlay = RenderDrawingPng(layout);
+            key = MediaPreparer.KeyOf(layout.Background, layout.Orientation, overlay, layout.SecondBackground);
+        }
+        catch (Exception)
+        {
+            return; // a file of the design is missing; Apply will say so
+        }
+        if (key == _preconvertKey)
+            return;
+        _preparer.CancelBackground();
+        _preconvertKey = key;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            await _preparer.PrepareAsync(layout.Background, layout.Orientation, overlay, null, CancellationToken.None, layout.SecondBackground, background: true);
+            if (clock.Elapsed > TimeSpan.FromSeconds(1))
+                AddLog($"Converted for the cooler in the background ({clock.Elapsed.TotalSeconds:0} s): Apply will only upload it.");
+        }
+        catch (OperationCanceledException)
+        {
+            if (_preconvertKey == key)
+                _preconvertKey = null;
+        }
+        catch (Exception ex)
+        {
+            if (_preconvertKey == key)
+                _preconvertKey = null;
+            AddLog("Background conversion failed (Apply will try again): " + ex.Message);
         }
     }
 
@@ -734,7 +1076,11 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             if (value != LayoutOrientation.Portrait)
+            {
                 Area = ScreenArea.Whole;
+                // Landscape has no faces: one media fills the screen (Ctrl+Z brings the other back).
+                SetOther(null, edited: false);
+            }
         }
         finally
         {
@@ -1032,13 +1378,96 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Still of an earlier upload: "upn360-&lt;key&gt;.…" maps to the media cache "&lt;key&gt;.png".</summary>
+    /// <summary>The cache key of one of this app's uploads ("upn360-&lt;key&gt;.mp4.h264_…"), or null.</summary>
+    private static string? DeviceKey(string deviceName) =>
+        deviceName.StartsWith(DisplayEngine.RemotePrefix, StringComparison.Ordinal)
+            ? deviceName[DisplayEngine.RemotePrefix.Length..].Split('.')[0]
+            : null;
+
     private string? DeviceThumbnailPath(string deviceName)
     {
-        if (!deviceName.StartsWith(DisplayEngine.RemotePrefix, StringComparison.Ordinal))
+        if (DeviceKey(deviceName) is not { } key)
             return null;
-        var key = deviceName[DisplayEngine.RemotePrefix.Length..].Split('.')[0];
         var png = Path.Combine(_storage.MediaCacheDir, key + ".png");
         return File.Exists(png) ? png : null;
+    }
+
+    /// <summary>The exact stream this app sent for an upload, if it is still in the local cache.</summary>
+    private string? DeviceStreamPath(string deviceName)
+    {
+        if (DeviceKey(deviceName) is not { } key)
+            return null;
+        var h264 = Path.Combine(_storage.MediaCacheDir, key + ".h264");
+        return File.Exists(h264) ? h264 : null;
+    }
+
+    private CancellationTokenSource? _deviceClipCts;
+
+    /// <summary>
+    /// Moving previews for "On the cooler": this app's uploads, made from the stream that was sent
+    /// (turned upright again for portrait designs). Copies of files no longer on the cooler are removed.
+    /// </summary>
+    private async Task LoadDeviceClipsAsync(List<DeviceMediaViewModel> items, CancellationToken token)
+    {
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
+        {
+            if (token.IsCancellationRequested)
+                return;
+            if (DeviceStreamPath(item.Name) is not { } h264 || DeviceKey(item.Name) is not { } key)
+                continue;
+            var mp4 = Path.Combine(_storage.PreviewDir, $"device-clip-{key}.mp4");
+            keep.Add(mp4);
+            try
+            {
+                var seconds = await Task.Run(() => MediaPreparer.ProbeStreamSecondsAsync(h264, token), token);
+                if (seconds > 0)
+                    item.DurationText = TimeSpan.FromSeconds(Math.Round(seconds)).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss", CultureInfo.InvariantCulture);
+                if (!File.Exists(mp4))
+                {
+                    // The upright still tells the design's orientation (portrait streams are stored turned).
+                    var portrait = DeviceThumbnailPath(item.Name) is { } png && IsTall(png);
+                    var part = mp4 + ".part";
+                    try
+                    {
+                        await Task.Run(() => MediaPreparer.RenderStreamPreviewClipAsync(h264, portrait, MediaLibrary.CardClipSeconds, part, token), token);
+                        File.Move(part, mp4, overwrite: true);
+                    }
+                    finally
+                    {
+                        try { File.Delete(part); } catch { }
+                    }
+                }
+                item.Clip = new Uri(mp4);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                // No moving preview for this one; its still stays.
+            }
+        }
+        foreach (var old in Directory.EnumerateFiles(_storage.PreviewDir, "device-clip-*"))
+        {
+            if (!keep.Contains(old))
+                try { File.Delete(old); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    private static bool IsTall(string imagePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(imagePath);
+            var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+            return frame.PixelHeight > frame.PixelWidth;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     /// <summary>Adds a line to the Activity log (used by app-level services).</summary>
@@ -1337,6 +1766,7 @@ public sealed partial class MainViewModel : ObservableObject
                 layout.Brightness = current.Brightness;
                 layout.Fahrenheit = current.Fahrenheit;
                 layout.Background = current.Background;
+                layout.SecondBackground = current.SecondBackground;
             }
             // Template sensor roles become this PC's sensors.
             foreach (var w in layout.Widgets.Where(w => w.SensorId?.StartsWith(SensorHub.RolePrefix, StringComparison.Ordinal) == true))
@@ -1380,6 +1810,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ================================================================== background
 
+    /// <summary>
+    /// Asks where a new media goes (whole screen, top face or front face); set by the main window.
+    /// Returns null when the user cancels.
+    /// </summary>
+    public Func<string, ScreenArea?>? AskArea { get; set; }
+
+    /// <summary>Where a new media goes: asked in portrait; landscape has only the whole screen.</summary>
+    public ScreenArea? ChooseArea(string title) =>
+        Orientation != LayoutOrientation.Portrait ? ScreenArea.Whole
+        : AskArea is { } ask ? ask(title)
+        : ScreenArea.Whole;
+
     [RelayCommand]
     private void ChooseBackground()
     {
@@ -1388,19 +1830,21 @@ public sealed partial class MainViewModel : ObservableObject
             Title = "Choose a background",
             Filter = "Images, GIFs and videos|" + string.Join(";", MediaExtensions.Select(e => "*" + e)) + "|All files|*.*",
         };
-        if (dialog.ShowDialog() == true)
-            SetBackground(dialog.FileName);
+        if (dialog.ShowDialog() == true && ChooseArea(Path.GetFileName(dialog.FileName)) is { } area)
+            SetBackground(dialog.FileName, area);
     }
 
     public static bool IsMediaFile(string path) => MediaExtensions.Contains(Path.GetExtension(path).ToLowerInvariant());
 
-    public void SetBackground(string path)
+    public void SetBackground(string path, ScreenArea area)
     {
+        PrepareSlot(area);
         _loading = true;
         try
         {
             BackgroundDeviceFile = null;
             ResetPlacement();
+            Area = Orientation == LayoutOrientation.Portrait ? area : ScreenArea.Whole;
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = 0;
@@ -1413,19 +1857,21 @@ public sealed partial class MainViewModel : ObservableObject
         BackgroundPath = path;
         _library.Remember(LibraryKind.File, path, null);
         ReloadLibrary();
-        Status = $"Background set to {Path.GetFileName(path)}. Apply to send it to the cooler.";
+        Status = $"{Path.GetFileName(path)} is on the {ActiveFaceName}. Apply to send it to the cooler.";
     }
 
     public YouTubeImporter YouTube => _youTube ??= new YouTubeImporter(_storage.DownloadDir);
 
     /// <summary>Uses a downloaded YouTube section; the start is cut frame-exactly at conversion.</summary>
-    public void UseImportedClip(ImportedClip clip, string? title)
+    public void UseImportedClip(ImportedClip clip, string? title, ScreenArea area)
     {
+        PrepareSlot(area);
         _loading = true;
         try
         {
             BackgroundDeviceFile = null;
             ResetPlacement();
+            Area = Orientation == LayoutOrientation.Portrait ? area : ScreenArea.Whole;
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = Math.Round(clip.OffsetSeconds, 3);
@@ -1438,7 +1884,15 @@ public sealed partial class MainViewModel : ObservableObject
         BackgroundPath = clip.FilePath;
         _library.Remember(LibraryKind.YouTube, clip.FilePath, title, StartSeconds, DurationSeconds);
         ReloadLibrary();
-        Status = $"Imported “{title}”. It fills the screen; adjust it under Background or in BACKGROUND mode, then Apply.";
+        Status = $"Imported “{title}” on the {ActiveFaceName}. Adjust it under Background or in BACKGROUND mode, then Apply.";
+    }
+
+    /// <summary>A downloaded clip that was not placed (the area question was cancelled) stays in My media.</summary>
+    public void KeepImportedClip(ImportedClip clip, string? title)
+    {
+        _library.Remember(LibraryKind.YouTube, clip.FilePath, title, Math.Round(clip.OffsetSeconds, 3), Math.Round(clip.LengthSeconds, 3));
+        ReloadLibrary();
+        Status = $"“{title}” is saved in Library, My media. Use it from there whenever you like.";
     }
 
     /// <summary>A new source is measured again and starts as "fill the current area", centred.</summary>
@@ -1458,6 +1912,15 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ClearBackground()
     {
+        if (_other is not null)
+        {
+            // Clearing one face leaves the other face's media in place.
+            var face = ActiveFaceName;
+            EditOtherMedia();
+            SetOther(null, edited: true);
+            Status = $"Cleared the {face}.";
+            return;
+        }
         BackgroundDeviceFile = null;
         BackgroundPath = null;
     }
@@ -1547,11 +2010,15 @@ public sealed partial class MainViewModel : ObservableObject
             Status = "That file is no longer on this PC.";
             return;
         }
+        if (ChooseArea(e.Title) is not { } area)
+            return;
+        PrepareSlot(area);
         _loading = true;
         try
         {
             BackgroundDeviceFile = null;
             ResetPlacement();
+            Area = Orientation == LayoutOrientation.Portrait ? area : ScreenArea.Whole;
             CropX = 0.5;
             CropY = 0.5;
             StartSeconds = e.StartSeconds;
@@ -1565,7 +2032,7 @@ public sealed partial class MainViewModel : ObservableObject
         _library.Remember(e.Kind, e.Path, e.Title, e.StartSeconds, e.LengthSeconds);
         ReloadLibrary();
         CurrentPage = "Studio";
-        Status = $"Background: {e.Title}. Apply to send it to the cooler.";
+        Status = $"{e.Title} is on the {ActiveFaceName}. Apply to send it to the cooler.";
     }
 
     [RelayCommand]
@@ -1600,12 +2067,18 @@ public sealed partial class MainViewModel : ObservableObject
             DeviceItems.Clear();
             foreach (var m in media.OrderBy(m => m.IsPreset).ThenBy(m => m.Name, StringComparer.Ordinal))
             {
-                var item = new DeviceMediaViewModel(m.Name, m.Size, m.IsPreset, m.ReadOnly, m.InUse);
+                var item = new DeviceMediaViewModel(m.Name, m.Size, m.IsPreset, m.ReadOnly, m.InUse)
+                {
+                    HasLocalCopy = DeviceStreamPath(m.Name) is not null,
+                };
                 if (DeviceThumbnailPath(m.Name) is { } png)
                     item.Thumbnail = LoadImage(png);
                 DeviceItems.Add(item);
             }
             DeviceListNote = $"{media.Count} files on the cooler · {media.Count(m => m.IsPreset)} TRYX presets";
+            _deviceClipCts?.Cancel();
+            _deviceClipCts = new CancellationTokenSource();
+            _ = LoadDeviceClipsAsync(DeviceItems.ToList(), _deviceClipCts.Token);
         }
         catch (Exception ex)
         {
@@ -1620,6 +2093,9 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task PlayDeviceItem(DeviceMediaViewModel item)
     {
+        // A file already on the cooler plays as it is, on the whole screen.
+        SetOther(null, edited: false);
+        Area = ScreenArea.Whole;
         BackgroundDeviceFile = item.Name;
         CurrentPage = "Studio";
         if (HasDrawing)
@@ -1732,6 +2208,20 @@ public sealed partial class MainViewModel : ObservableObject
             var layout = BuildLayout();
             var overlay = includeBackground && layout.Background.DeviceFile is null ? RenderDrawingPng(layout) : null;
             await _engine.ApplyAsync(layout, includeBackground, overlay, progress);
+            if (_engine.LastApplyTimings is { } timings)
+            {
+                AddLog("Apply " + timings);
+                try
+                {
+                    var file = Path.Combine(_storage.LocalDir, "apply.log");
+                    var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : [];
+                    lines.Add($"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {timings}");
+                    File.WriteAllLines(file, lines.TakeLast(50));
+                }
+                catch (IOException)
+                {
+                }
+            }
             HasApplied = true;
             BackgroundDirty = false;
             _storage.AutoApply = true;
@@ -1752,6 +2242,11 @@ public sealed partial class MainViewModel : ObservableObject
 
     public void Shutdown()
     {
+        // Stop preview and library conversions (their ffmpeg processes are killed on cancel).
+        foreach (var cts in new[] { _clipCts, _otherCts, _thumbCts, _deviceClipCts, _previewCts })
+            cts?.Cancel();
+        _preconvertDebounce?.Stop();
+        _preparer.CancelAll();
         _tick.Stop();
         CommitNow();
         _storage.SaveLayout(BuildLayout());

@@ -90,6 +90,12 @@ public sealed class DisplayEngine : IAsyncDisposable
     /// converted (cached), uploaded if the cooler does not have it yet, and set as the playing media.
     /// </summary>
     /// <param name="overlayPng">The drawing rendered as a transparent canvas-size PNG, or null.</param>
+    /// <summary>How long the last Apply spent on each step, e.g. "total 6.2 s: convert 3.8 s (9.4 MB), upload 1.9 s …".</summary>
+    public string? LastApplyTimings { get; private set; }
+
+    /// <summary>True while a file is being sent to the cooler (exiting waits for it).</summary>
+    public bool IsUploading { get; private set; }
+
     public async Task ApplyAsync(ScreenLayout layout, bool includeBackground, string? overlayPng = null, IProgress<ProgressInfo>? progress = null, CancellationToken cancellationToken = default)
     {
         var snapshot = layout.Clone();
@@ -98,6 +104,9 @@ public sealed class DisplayEngine : IAsyncDisposable
         {
             var session = _session ?? throw new InvalidOperationException("The cooler is not connected.");
             string? mediaName = null;
+            // Where the time goes (shown in the Activity log and kept by the app in apply.log).
+            var total = System.Diagnostics.Stopwatch.StartNew();
+            var timings = new List<string>();
             if (includeBackground && snapshot.Background.DeviceFile is { } deviceFile)
             {
                 // A file already on the cooler (preset or earlier upload): just play it.
@@ -109,22 +118,42 @@ public sealed class DisplayEngine : IAsyncDisposable
             else if (includeBackground)
             {
                 // No background chosen means a black screen (plus the drawing), not whatever played before.
-                var prepared = await _preparer.PrepareAsync(snapshot.Background, snapshot.Orientation, overlayPng, progress, cancellationToken).ConfigureAwait(false);
+                var phase = System.Diagnostics.Stopwatch.StartNew();
+                // Quitting the app stops a conversion at once (nothing has been sent yet); an upload is left to finish.
+                using var convert = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+                var prepared = await _preparer.PrepareAsync(snapshot.Background, snapshot.Orientation, overlayPng, progress, convert.Token, snapshot.SecondBackground).ConfigureAwait(false);
+                timings.Add($"convert {phase.Elapsed.TotalSeconds:0.0} s ({prepared.Size / 1048576.0:0.0} MB{(phase.Elapsed.TotalSeconds < 0.2 ? ", cached" : "")})");
                 var catalog = await session.GetMediaCatalogAsync(cancellationToken).ConfigureAwait(false);
                 var existing = catalog.MediaFileList.FirstOrDefault(e => PanoramaSession.MediaName(e) == prepared.RemoteName);
                 if (existing is null || existing.FileSize != prepared.Size)
                 {
                     var megabytes = prepared.Size / 1048576.0;
-                    progress?.Report(new ProgressInfo("Uploading to the cooler…", 0, $"{megabytes:F1} MB"));
+                    progress?.Report(new ProgressInfo("Uploading to the cooler…", 0));
                     var bytes = await File.ReadAllBytesAsync(prepared.StreamPath, cancellationToken).ConfigureAwait(false);
-                    await session.UploadMediaAsync(prepared.RemoteName, bytes,
-                        new Progress<double>(p => progress?.Report(new ProgressInfo($"Uploading to the cooler… {p:P0}", p, $"{p * megabytes:F1} of {megabytes:F1} MB"))),
-                        cancellationToken).ConfigureAwait(false);
+                    phase.Restart();
+                    IsUploading = true;
+                    try
+                    {
+                        await session.UploadMediaAsync(prepared.RemoteName, bytes,
+                            new Progress<double>(p => progress?.Report(new ProgressInfo($"Uploading to the cooler… {p:P0}", p))),
+                            cancellationToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        IsUploading = false;
+                    }
+                    var seconds = Math.Max(0.001, phase.Elapsed.TotalSeconds);
+                    timings.Add($"upload {seconds:0.0} s ({megabytes / seconds:0.0} MB/s)");
+                }
+                else
+                {
+                    timings.Add("upload skipped (already on the cooler)");
                 }
                 mediaName = prepared.RemoteName;
             }
 
             progress?.Report(new ProgressInfo("Applying to the cooler…"));
+            var configure = System.Diagnostics.Stopwatch.StartNew();
             await session.SetOverlayAsync(LayoutCompiler.Compile(snapshot, w => _text.Resolve(w, snapshot.Fahrenheit)), cancellationToken).ConfigureAwait(false);
             var (_, after) = await session.UpdateUserConfigurationAsync(c =>
             {
@@ -147,12 +176,16 @@ public sealed class DisplayEngine : IAsyncDisposable
                 || (mediaName is not null && after.WorkConfig?.SingleModeMediaFile != mediaName))
                 throw new DeviceProtocolException("The cooler did not keep the requested settings (readback differs).");
 
+            timings.Add($"configure {configure.Elapsed.TotalSeconds:0.0} s");
             _applied = snapshot;
             if (mediaName is not null)
             {
                 _appliedMediaName = mediaName;
+                var cleanup = System.Diagnostics.Stopwatch.StartNew();
                 await RemoveStaleUploadsAsync(session, after, cancellationToken).ConfigureAwait(false);
+                timings.Add($"cleanup {cleanup.Elapsed.TotalSeconds:0.0} s");
             }
+            LastApplyTimings = $"total {total.Elapsed.TotalSeconds:0.0} s: {string.Join(", ", timings)}";
             progress?.Report(new ProgressInfo("Applied.", 1));
             Log?.Invoke($"applied layout: {snapshot.Widgets.Count} widget(s), {snapshot.Orientation}{(mediaName is null ? "" : $", background {mediaName}")}");
         }
@@ -404,6 +437,7 @@ public sealed class DisplayEngine : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _shutdown.Cancel();
+        _preparer.CancelAll(); // conversions (Apply's or background ones) stop at once; nothing has been sent yet
         try
         {
             await _loop.ConfigureAwait(false);
@@ -411,8 +445,13 @@ public sealed class DisplayEngine : IAsyncDisposable
         catch (OperationCanceledException)
         {
         }
+        // An upload in progress finishes first, so the cooler never keeps half a file and the
+        // session is not closed under it (a 340 MB upload takes ~20 s at the measured 17 MB/s).
+        var idle = await _apply.WaitAsync(TimeSpan.FromSeconds(90)).ConfigureAwait(false);
         if (_session is not null)
             await _session.DisposeAsync().ConfigureAwait(false);
+        if (idle)
+            _apply.Release();
         _shutdown.Dispose();
     }
 }

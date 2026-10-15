@@ -49,6 +49,7 @@ public partial class StudioView : UserControl
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        IsVisibleChanged += (_, _) => UpdateClip();
         Ink.StrokeCollected += (_, _) => SaveInk();
         Ink.StrokeErased += (_, _) => SaveInk();
         Ink.PreviewMouseLeftButtonDown += OnInkDown;
@@ -83,6 +84,7 @@ public partial class StudioView : UserControl
             _window.StateChanged += OnWindowStateChanged;
         }
         _clipSource = null;
+        _otherSource = null;
         UpdateClip();
     }
 
@@ -101,54 +103,121 @@ public partial class StudioView : UserControl
             _window.StateChanged -= OnWindowStateChanged;
         }
         ClipPlayer.Close();
+        OtherPlayer.Close();
         _clipSource = null;
+        _otherSource = null;
     }
 
     // ================================================================== video preview
 
     private Uri? _clipSource;
+    private Uri? _otherSource;
 
-    /// <summary>Loads, plays, pauses or closes the looping preview clip to match the view model.</summary>
+    /// <summary>Loads, plays, pauses or closes both looping preview clips to match the view model.</summary>
     private void UpdateClip()
     {
         if (_vm is null)
             return;
-        var clip = Vm.SourceClip;
-        if (clip != _clipSource)
+        // No decoding while the Studio page is not shown, or the window is in the tray or minimised.
+        var shown = IsVisible && _window is { IsVisible: true } w && w.WindowState != WindowState.Minimized;
+        var play = Vm.PreviewPlaying && shown;
+        UpdatePlayer(ClipPlayer, Vm.SourceClip, ref _clipSource, play);
+        UpdatePlayer(OtherPlayer, Vm.HasOther ? Vm.OtherClip : null, ref _otherSource, play);
+    }
+
+    private static void UpdatePlayer(MediaElement player, Uri? clip, ref Uri? current, bool play)
+    {
+        if (clip != current)
         {
-            _clipSource = clip;
-            ClipPlayer.Close();
-            ClipPlayer.Source = clip;
-            ClipPlayer.Visibility = Visibility.Hidden; // shown once the first frame is ready (no black flash)
+            current = clip;
+            player.Close();
+            player.Source = clip;
+            player.Visibility = Visibility.Hidden; // shown once the first frame is ready (no black flash)
         }
         if (clip is null)
             return;
-        // No decoding while the window is hidden in the tray or minimised.
-        var shown = _window is { IsVisible: true } w && w.WindowState != WindowState.Minimized;
-        if (Vm.PreviewPlaying && shown)
-            ClipPlayer.Play();
+        if (play)
+            player.Play();
         else
-            ClipPlayer.Pause();
+            player.Pause();
     }
 
     private void OnWindowVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdateClip();
 
     private void OnWindowStateChanged(object? sender, EventArgs e) => UpdateClip();
 
-    private void OnClipOpened(object sender, RoutedEventArgs e) => ClipPlayer.Visibility = Visibility.Visible;
+    private void OnClipOpened(object sender, RoutedEventArgs e) => ((MediaElement)sender).Visibility = Visibility.Visible;
 
     private void OnClipEnded(object sender, RoutedEventArgs e)
     {
         // Loop like the cooler does.
-        ClipPlayer.Position = TimeSpan.Zero;
+        ((MediaElement)sender).Position = TimeSpan.Zero;
         UpdateClip();
     }
 
     private void OnClipFailed(object sender, ExceptionRoutedEventArgs e)
     {
         // The still frame underneath stays; say why the video does not move.
-        ClipPlayer.Visibility = Visibility.Hidden;
+        ((MediaElement)sender).Visibility = Visibility.Hidden;
         Vm.Status = "The video preview could not play: " + e.ErrorException.Message;
+    }
+
+    // ================================================================== drop targets
+
+    /// <summary>
+    /// Where a file dropped at this window point goes, decided by height alone so the whole window is
+    /// a target: level with the top third of the screen preview (or above it) is the top face, the
+    /// bottom third (or below) the front face, the middle the whole screen; landscape is always the
+    /// whole screen. Null only when the Studio page is not shown.
+    /// </summary>
+    public ScreenArea? DropZoneAt(Point windowPoint)
+    {
+        if (!IsVisible || _window is null || Screen.ActualHeight <= 0)
+            return null;
+        Point p;
+        try
+        {
+            p = _window.TranslatePoint(windowPoint, Screen);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        if (!Vm.IsPortrait)
+            return ScreenArea.Whole;
+        var third = Screen.ActualHeight / 3;
+        return p.Y < third ? ScreenArea.TopFace : p.Y > 2 * third ? ScreenArea.FrontFace : ScreenArea.Whole;
+    }
+
+    /// <summary>Shows the drop zones and lights up the one the file would go to (null hides them).</summary>
+    public void ShowDropTarget(Point? windowPoint)
+    {
+        if (windowPoint is not { } point || !IsVisible)
+        {
+            DropLayer.Visibility = Visibility.Collapsed;
+            return;
+        }
+        DropLayer.Visibility = Visibility.Visible;
+        var portrait = Vm.IsPortrait;
+        DropHintTop.Visibility = DropHintFront.Visibility = portrait ? Visibility.Visible : Visibility.Collapsed;
+        var zone = DropZoneAt(point);
+        if (zone is not { } area)
+        {
+            DropTarget.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var box = Placement.AreaBox(area, Vm.Orientation);
+        Canvas.SetLeft(DropTarget, box.X + 16);
+        Canvas.SetTop(DropTarget, box.Y + 16);
+        DropTarget.Width = box.W - 32;
+        DropTarget.Height = box.H - 32;
+        DropTargetText.Text = area switch
+        {
+            ScreenArea.TopFace => "TOP FACE",
+            ScreenArea.FrontFace => "FRONT FACE",
+            _ => "WHOLE SCREEN",
+        };
+        DropTarget.Visibility = Visibility.Visible;
     }
 
     private static Brush Frozen(Brush b)
@@ -209,6 +278,8 @@ public partial class StudioView : UserControl
                 ApplyInkSettings();
                 break;
             case nameof(MainViewModel.SourceClip):
+            case nameof(MainViewModel.OtherClip):
+            case nameof(MainViewModel.HasOther):
             case nameof(MainViewModel.PreviewPlaying):
                 UpdateClip();
                 break;
@@ -380,6 +451,9 @@ public partial class StudioView : UserControl
     {
         e.Handled = true;
         Screen.Focus();
+        // Clicking the other face's media switches to editing it.
+        if (Vm.HasOther && Vm.OtherAreaRect.Contains(e.GetPosition(Screen)))
+            Vm.EditOtherMediaCommand.Execute(null);
         if (!Vm.HasPlacement)
         {
             Vm.Status = "Choose an image, GIF or video first (Background card on the left).";

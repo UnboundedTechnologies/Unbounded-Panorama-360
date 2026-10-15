@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using Unbounded.Panorama.App.ViewModels;
+using Unbounded.Panorama.Layout;
 
 namespace Unbounded.Panorama.App;
 
@@ -23,6 +24,13 @@ public partial class MainWindow : Window
             Services.TrayIcon.DrawIcon().Handle, Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
         PreviewKeyDown += OnKey;
         StateChanged += (_, _) => FitMaximized();
+        vm.AskArea = title => AreaPickerWindow.Ask(this, title);
+
+        // Our own clicks are not file drags (see WatchFileDrag).
+        PreviewMouseLeftButtonDown += (_, _) => _ownPress = true;
+        PreviewMouseLeftButtonUp += (_, _) => _ownPress = false;
+        _dragWatch = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(40), System.Windows.Threading.DispatcherPriority.Input, (_, _) => WatchFileDrag(), Dispatcher);
+        IsVisibleChanged += (_, _) => _dragWatch.IsEnabled = IsVisible;
     }
 
     // ================================================================== chrome
@@ -85,9 +93,63 @@ public partial class MainWindow : Window
         Services.WindowChrome.UseDarkTitleBar(dialog);
         if (dialog.ShowDialog() == true && dialog.Result is { } clip)
         {
-            _vm.UseImportedClip(clip, dialog.VideoTitle);
-            _vm.CurrentPage = "Studio";
+            if (_vm.ChooseArea(dialog.VideoTitle ?? "YouTube clip") is { } area)
+            {
+                _vm.UseImportedClip(clip, dialog.VideoTitle, area);
+                _vm.CurrentPage = "Studio";
+            }
+            else
+            {
+                // Not placed now, but kept: it is in My media for later.
+                _vm.KeepImportedClip(clip, dialog.VideoTitle);
+            }
         }
+    }
+
+    /// <summary>A file from a drop (its zone decides, no question) or a paste (asked: there is nothing to aim).</summary>
+    private void UseFile(string path, ScreenArea? zone)
+    {
+        if ((zone ?? _vm.ChooseArea(System.IO.Path.GetFileName(path))) is not { } area)
+            return;
+        _vm.SetBackground(path, area);
+        _vm.CurrentPage = "Studio";
+    }
+
+    // ------------------------------------------------------------------ file drag feedback
+
+    // Windows sends no drag-over events to this elevated window (the OLE target is revoked so that
+    // Explorer falls back to WM_DROPFILES). A drag in progress is recognised instead by polling: the
+    // left button is down, the cursor is over this window (WindowFromPoint skips Explorer's drag
+    // image but not a window being moved), and the press did not start in this window.
+    private readonly System.Windows.Threading.DispatcherTimer _dragWatch;
+    private bool _ownPress;
+    private bool _sizeMove;
+    private bool _dragShown;
+
+    /// <summary>The zone lit up while dragging; a drop goes exactly there (what you see is what you get).</summary>
+    private ScreenArea? _litZone;
+
+    private void WatchFileDrag()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (!down)
+            _ownPress = false;
+        Point? at = null;
+        if (down && !_ownPress && !_sizeMove && GetCursorPos(out var cursor)
+            && GetAncestor(WindowFromPoint(cursor), GA_ROOT) == hwnd)
+        {
+            // Aiming needs the screen preview: a drag over Library or Settings brings Studio up.
+            if (_vm.CurrentPage != "Studio")
+                _vm.CurrentPage = "Studio";
+            at = PointFromScreen(new Point(cursor.X, cursor.Y));
+        }
+        if (at is null && !_dragShown)
+            return;
+        _dragShown = at is not null;
+        if (at is { } point)
+            _litZone = Studio.DropZoneAt(point) ?? _litZone;
+        Studio.ShowDropTarget(at);
     }
 
     private void OnKey(object sender, KeyEventArgs e)
@@ -114,8 +176,7 @@ public partial class MainWindow : Window
                 var file = Clipboard.GetFileDropList().Cast<string>().FirstOrDefault(MainViewModel.IsMediaFile);
                 if (file is not null)
                 {
-                    _vm.SetBackground(file);
-                    _vm.CurrentPage = "Studio";
+                    UseFile(file, null);
                     return true;
                 }
             }
@@ -138,10 +199,20 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WM_ENTERSIZEMOVE)
+            _sizeMove = true;
+        else if (msg == WM_EXITSIZEMOVE)
+            _sizeMove = false;
         if (msg != WM_DROPFILES)
             return IntPtr.Zero;
+        string? media = null;
+        // The zone that was lit decides; failing that (no drag was seen), where it was dropped.
+        var zone = _litZone;
+        _litZone = null;
         try
         {
+            if (zone is null && DragQueryPoint(wParam, out var drop) && ClientToScreen(hwnd, ref drop))
+                zone = Studio.DropZoneAt(PointFromScreen(new Point(drop.X, drop.Y)));
             var count = DragQueryFile(wParam, 0xFFFFFFFF, null, 0);
             for (uint i = 0; i < count; i++)
             {
@@ -151,8 +222,7 @@ public partial class MainWindow : Window
                 var path = buffer.ToString();
                 if (MainViewModel.IsMediaFile(path))
                 {
-                    _vm.SetBackground(path);
-                    _vm.CurrentPage = "Studio";
+                    media = path;
                     break;
                 }
                 _vm.Status = $"{System.IO.Path.GetFileName(path)} is not an image, GIF or video.";
@@ -162,7 +232,15 @@ public partial class MainWindow : Window
         {
             DragFinish(wParam);
         }
+        _dragShown = false;
+        Studio.ShowDropTarget(null);
         handled = true;
+        if (media is not null)
+        {
+            // After this message returns, so Explorer is not kept waiting while the user answers.
+            var file = media;
+            Dispatcher.BeginInvoke(() => UseFile(file, zone));
+        }
         return IntPtr.Zero;
     }
 
@@ -190,4 +268,34 @@ public partial class MainWindow : Window
     private static extern void DragFinish(IntPtr hDrop);
 
     [DllImport("ole32.dll")]
-    private static extern int RevokeDragDrop(IntPtr hwnd);}
+    private static extern int RevokeDragDrop(IntPtr hwnd);
+
+    private const int WM_ENTERSIZEMOVE = 0x0231;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+    private const int VK_LBUTTON = 0x01;
+    private const uint GA_ROOT = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("shell32.dll")]
+    private static extern bool DragQueryPoint(IntPtr hDrop, out POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);}

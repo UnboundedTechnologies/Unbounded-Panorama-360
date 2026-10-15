@@ -56,4 +56,18 @@ public sealed partial class DeviceMediaViewModel(string name, long size, bool is
     }
 
     [ObservableProperty] public partial ImageSource? Thumbnail { get; set; }
+
+    /// <summary>
+    /// Only this app's uploads can be previewed: the app keeps the exact stream it sent. The cooler
+    /// cannot send files back (its protocol only lists, uploads and deletes).
+    /// </summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(NoPreview))] public partial bool HasLocalCopy { get; set; }
+
+    public bool NoPreview => !HasLocalCopy;
+
+    /// <summary>The card's looping preview, once made.</summary>
+    [ObservableProperty] public partial Uri? Clip { get; set; }
+
+    /// <summary>Played length, e.g. "5:00" ("VIDEO" until known).</summary>
+    [ObservableProperty] public partial string DurationText { get; set; } = "VIDEO";
 }

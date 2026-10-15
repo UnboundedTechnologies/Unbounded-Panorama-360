@@ -97,7 +97,7 @@ public sealed class BackgroundMedia
     /// <summary>Start offset into a video, seconds.</summary>
     public double StartSeconds { get; set; }
 
-    /// <summary>Length to keep, seconds; null keeps the rest of the source (60 s for still images).</summary>
+    /// <summary>Length to keep, seconds; null keeps the rest of the source. Pictures ignore it (a short looping clip).</summary>
     public double? DurationSeconds { get; set; }
 
     /// <summary>
@@ -153,6 +153,59 @@ public static class Placement
     /// </summary>
     public const int BendY = 1100;
 
+    /// <summary>The other face: top for front and front for top (Whole has none).</summary>
+    public static ScreenArea Opposite(ScreenArea area) => area switch
+    {
+        ScreenArea.TopFace => ScreenArea.FrontFace,
+        ScreenArea.FrontFace => ScreenArea.TopFace,
+        _ => ScreenArea.Whole,
+    };
+
+    /// <summary>
+    /// The second media when it can be shown: portrait, the first on one face and the second, with a
+    /// file and a placement, on the other. Otherwise null.
+    /// </summary>
+    public static BackgroundMedia? Pairable(BackgroundMedia first, BackgroundMedia? second, Orientation orientation) =>
+        second is { SourcePath: not null, DeviceFile: null, HasPlacement: true }
+        && orientation == Orientation.Portrait
+        && first is { SourcePath: not null, DeviceFile: null }
+        && first.Area != ScreenArea.Whole
+        && second.Area == Opposite(first.Area)
+            ? second
+            : null;
+
+    /// <summary>
+    /// Makes room for a new media on <paramref name="target"/> and returns what stays on the other
+    /// face (null for nothing): the whole screen replaces everything; a face keeps the other face's
+    /// media; a media that filled the whole screen moves to the other face (filling it); a media
+    /// already on the target face is replaced. Portrait only (landscape has only the whole screen).
+    /// </summary>
+    public static BackgroundMedia? MakeRoom(BackgroundMedia? current, BackgroundMedia? other, ScreenArea target, Orientation orientation)
+    {
+        if (target == ScreenArea.Whole || orientation != Orientation.Portrait)
+            return null;
+        var opposite = Opposite(target);
+        if (current is null || current.Area == target)
+            return other?.Area == opposite ? other : null;
+        if (current.Area == ScreenArea.Whole)
+        {
+            current.Area = opposite;
+            FillOwnArea(current, orientation);
+        }
+        return current;
+    }
+
+    /// <summary>Places a media so it fills its own area, centred (after it moved to another face).</summary>
+    public static void FillOwnArea(BackgroundMedia media, Orientation orientation)
+    {
+        if (media.SourceWidth <= 0 || media.SourceHeight <= 0)
+            return;
+        var r = Fill(AreaBox(media.Area, orientation), media.SourceWidth, media.SourceHeight);
+        media.MediaX = r.X;
+        media.MediaY = r.Y;
+        media.MediaWidth = r.W;
+    }
+
     public static Box AreaBox(ScreenArea area, Orientation orientation)
     {
         var (w, h) = orientation == Orientation.Portrait ? (ScreenLayout.PanelHeight, ScreenLayout.PanelWidth) : (ScreenLayout.PanelWidth, ScreenLayout.PanelHeight);
@@ -203,6 +256,14 @@ public sealed class ScreenLayout
     public int Brightness { get; set; } = 80;
     public bool Fahrenheit { get; set; }
     public BackgroundMedia Background { get; set; } = new();
+
+    /// <summary>
+    /// Portrait only: a second media on the other face when <see cref="Background"/> is on the top
+    /// or front face (e.g. a video on the top face and a picture on the front face). Both are
+    /// combined into the one video the cooler plays.
+    /// </summary>
+    public BackgroundMedia? SecondBackground { get; set; }
+
     public List<Widget> Widgets { get; set; } = [];
 
     /// <summary>Free drawing (Windows ink, ISF, base64) in canvas coordinates; baked into the background.</summary>
