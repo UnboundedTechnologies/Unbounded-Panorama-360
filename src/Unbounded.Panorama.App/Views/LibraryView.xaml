@@ -102,7 +102,12 @@
                                             <Grid>
                                                 <TextBlock Text="&#xE8B9;" FontFamily="{StaticResource Icons}" FontSize="34" Foreground="{StaticResource Dim}"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                                <!-- ImageBrush crops evenly around the centre (an Image with UniformToFill crops right/bottom only). -->
+                                                <Border>
+                                                    <Border.Background>
+                                                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center" />
+                                                    </Border.Background>
+                                                </Border>
                                             </Grid>
                                         </Border>
                                         <Border Style="{StaticResource Pill}">
@@ -170,7 +175,12 @@
                                             <Grid>
                                                 <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource Icons}" FontSize="34" Foreground="#6600E5FF"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                                <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" />
+                                                <!-- ImageBrush crops evenly around the centre (an Image with UniformToFill crops right/bottom only). -->
+                                                <Border>
+                                                    <Border.Background>
+                                                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill" AlignmentX="Center" AlignmentY="Center" />
+                                                    </Border.Background>
+                                                </Border>
                                             </Grid>
                                         </Border>
                                         <Border Style="{StaticResource Pill}">
