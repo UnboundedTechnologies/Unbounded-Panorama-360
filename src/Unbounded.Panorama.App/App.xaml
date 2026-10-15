@@ -187,7 +187,7 @@
                 <Setter Property="Background" Value="#26FF7A59" />
                 <Setter Property="BorderBrush" Value="#FF7A59" />
             </Style>
-            <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                 <Setter Property="Foreground" Value="#FF8FA3" />
             </Style>
             <Style x:Key="Chip" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

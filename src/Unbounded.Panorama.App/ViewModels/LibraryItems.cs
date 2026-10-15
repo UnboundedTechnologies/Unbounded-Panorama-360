@@ -34,7 +34,8 @@ public sealed partial class DeviceMediaViewModel(string name, long size, bool is
     public string SizeText => size >= 1048576 ? $"{size / 1048576.0:F1} MB" : $"{size / 1024.0:F0} KB";
 
     public string Title => IsPreset ? $"TRYX preset {PresetNumber}" : IsOurs ? "Unbounded upload" : "KANALI upload";
-    public string Badge => IsPreset ? "PRESET" : InUse ? "PLAYING" : "UPLOAD";
+    /// <summary>"In use" means referenced by the cooler's configuration (playing, split, power-on or standby).</summary>
+    public string Badge => InUse ? "IN USE" : IsPreset ? "PRESET" : "UPLOAD";
 
     private string PresetNumber
     {

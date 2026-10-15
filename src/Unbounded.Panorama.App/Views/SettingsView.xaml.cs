@@ -15,11 +15,14 @@ public partial class SettingsView : UserControl
         {
             if (e.NewValue is MainViewModel vm)
             {
+                // Scroll after the list has processed the change: this handler can run before the
+                // ListBox's own one, and scrolling then sees an inconsistent item count.
                 ((INotifyCollectionChanged)vm.LogLines).CollectionChanged += (_, _) =>
-                {
-                    if (Log.Items.Count > 0)
-                        Log.ScrollIntoView(Log.Items[^1]);
-                };
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        if (Log.Items.Count > 0)
+                            Log.ScrollIntoView(Log.Items[^1]);
+                    }, System.Windows.Threading.DispatcherPriority.Background);
             }
         };
     }

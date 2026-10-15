@@ -104,10 +104,32 @@ public partial class App : Application
         Shutdown();
     }
 
+    private bool _showingError;
+
+    /// <summary>Writes the full exception to crash.log and shows one message (never a cascade).</summary>
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        MessageBox.Show(e.Exception.Message, "Unbounded Panorama 360", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+        var log = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnboundedPanorama360", "crash.log");
+        try
+        {
+            System.IO.File.AppendAllText(log, $"==== {DateTime.Now:O}{Environment.NewLine}{e.Exception}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
+        if (_showingError)
+            return;
+        _showingError = true;
+        try
+        {
+            var inner = e.Exception.GetBaseException();
+            MessageBox.Show($"{inner.Message}\n\nDetails were saved to:\n{log}", "Unbounded Panorama 360", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _showingError = false;
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
