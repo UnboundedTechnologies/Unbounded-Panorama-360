@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Unbounded.Panorama.Core/Unbounded.Panorama.Core.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Unbounded.Panorama.Probe/Unbounded.Panorama.Probe.csproj" />
+  </Folder>
+</Solution>

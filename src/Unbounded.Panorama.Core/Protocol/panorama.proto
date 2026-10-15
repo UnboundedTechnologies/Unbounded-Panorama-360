@@ -1,0 +1,310 @@
+// Wire schema for TRYX printer-class displays (USB 391a:10x1).
+// Field numbers follow the protocol research published by DXVSI/Tryx-Linux-GUI (MIT).
+// Fields the device sends that are not declared here are kept by protobuf as unknown
+// fields, so a read-modify-write of UserConfiguration round-trips them unchanged.
+syntax = "proto3";
+
+package unbounded.panorama.wire;
+
+option csharp_namespace = "Unbounded.Panorama.Wire";
+
+// ---------------------------------------------------------------- configuration
+
+message MediaEntry {
+  string file_path = 1;
+  string file_ext = 2;
+  uint32 file_size = 3;
+  bool read_only = 4;
+}
+
+message MediaCatalog {
+  repeated MediaEntry media_file_list = 1;
+  repeated MediaEntry preset_file_list = 2;
+}
+
+message PowerOnConfiguration {
+  string media_file = 1;
+}
+
+message StandbyConfiguration {
+  bool enable = 1;
+  string media_file = 2;
+}
+
+message DisplayConfiguration {
+  bool backlight_enable = 1;
+  uint32 backlight_brightness = 2;
+  bool mirror = 3;
+  uint32 ui_rotation = 4;
+  uint32 media_rotation = 5;
+}
+
+message WorkConfiguration {
+  enum MediaMode {
+    MEDIA_SINGLE = 0;
+    MEDIA_DUAL = 1;
+    MEDIA_KALEIDOSCOPE = 2;
+  }
+  enum LoopMode {
+    LOOP_SINGLE = 0;
+    LOOP_ALL = 1;
+    LOOP_RANDOM = 2;
+  }
+  enum KaleidoscopeSource {
+    KALEIDOSCOPE_LEFT = 0;
+    KALEIDOSCOPE_RIGHT = 1;
+  }
+
+  MediaMode media_mode = 1;
+  LoopMode loop_mode = 2;
+  string single_mode_media_file = 3;
+  string dual_mode_left_media_file = 4;
+  string dual_mode_right_media_file = 5;
+  string kaleidoscope_media_file = 6;
+  KaleidoscopeSource kaleidoscope_source = 7;
+}
+
+message FilterConfiguration {
+  enum Mode {
+    FILTER_SINGLE = 0;
+    FILTER_DUAL = 1;
+  }
+
+  bool enable = 1;
+  string filter_file = 2;
+  uint32 alpha = 3;
+  string dual_mode_left_file = 4;
+  string dual_mode_right_file = 5;
+  uint32 dual_mode_left_alpha = 6;
+  uint32 dual_mode_right_alpha = 7;
+  Mode filter_mode = 8;
+}
+
+message UserConfiguration {
+  PowerOnConfiguration poweron_config = 1;
+  StandbyConfiguration standby_config = 2;
+  WorkConfiguration work_config = 3;
+  FilterConfiguration filter_config = 4;
+  DisplayConfiguration display_config = 5;
+}
+
+message DisplayPanelSummary {
+  enum Kind {
+    DISPLAY_PANEL_LCD = 0;
+    DISPLAY_PANEL_OLED = 1;
+  }
+  optional Kind kind = 1;
+}
+
+message StorageSummary {
+  optional string mount_base = 2;
+  optional string data_folder = 3;
+}
+
+message BoardSummary {
+  StorageSummary storage = 1;
+  DisplayPanelSummary display_panel = 2;
+}
+
+message FrameSize {
+  optional uint32 width = 1;
+  optional uint32 height = 2;
+}
+
+message RuntimeBehavior {
+  optional bool usb_auto_keepalive = 1;
+}
+
+message SystemConfiguration {
+  optional string reported_product = 1;
+  optional string poweron_media_file = 2;
+  optional string standby_media_file = 3;
+  BoardSummary board_summary = 9;
+  FrameSize video_decoder = 10;
+  FrameSize video_output = 12;
+  RuntimeBehavior runtime_behavior = 14;
+}
+
+// ---------------------------------------------------------------------- overlay
+
+message OverlayLabel {
+  enum Background {
+    BACKGROUND_NONE = 0;
+    BACKGROUND_COLOR = 1;
+    BACKGROUND_GRADIENT_VERTICAL = 2;
+    BACKGROUND_GRADIENT_HORIZONTAL = 3;
+  }
+
+  uint32 label_id = 1;
+  uint32 line = 2;
+  uint32 order = 3;
+  sint32 gap_left = 4;
+  Background background = 5;
+  uint32 background_color = 6;
+  uint32 gradient_color = 7;
+  string text_font = 8;
+  uint32 text_size = 9;
+  uint32 text_color = 10;
+  string text = 11;
+}
+
+message OverlayGroup {
+  enum TextAlignment {
+    ALIGN_AUTO = 0;
+    ALIGN_LEFT = 1;
+    ALIGN_CENTER = 2;
+    ALIGN_RIGHT = 3;
+  }
+
+  uint32 group_id = 1;
+  uint32 group_x = 2;
+  uint32 group_y = 3;
+  uint32 group_width = 4;
+  uint32 group_height = 5;
+  TextAlignment text_align = 6;
+  sint32 line_gap = 7;
+  repeated OverlayLabel labels = 8;
+}
+
+message OverlayLayout {
+  repeated OverlayGroup label_groups = 1;
+}
+
+message OverlayLabelUpdate {
+  uint32 label_id = 1;
+  string text = 2;
+}
+
+message OverlayGroupUpdate {
+  uint32 group_id = 1;
+  repeated OverlayLabelUpdate label_texts = 2;
+}
+
+message MetricBatch {
+  repeated OverlayGroupUpdate label_groups = 1;
+}
+
+// -------------------------------------------------------------------- transport
+
+message WireHeader {
+  uint32 version = 1;
+  uint64 track_id = 2;
+  uint32 payload_crc32 = 3;
+}
+
+message Ping {
+  bytes payload = 1;
+}
+
+message Pong {
+  bytes payload = 1;
+}
+
+message QueryToken {
+  string dummy = 1;
+}
+
+message DeviceAuthQuery {
+  uint32 key = 1;
+}
+
+message DeviceInformation {
+  string os_name = 1;
+  string os_version = 2;
+  string firmware_version = 3;
+  string product_name = 4;
+  string app_version = 5;
+  string serial_number = 8;
+  bool serial_number_locked = 9;
+  string chip_id = 10;
+}
+
+message DeviceAuthentication {
+  string auth = 1;
+}
+
+message TransferBegin {
+  bytes file_name = 1;
+  uint32 file_size = 2;
+}
+
+message TransferChunk {
+  bytes file_data = 1;
+}
+
+message TransferEnd {
+  bytes file_type = 1;
+  uint32 checksum = 2;
+}
+
+message TransferStatus {
+  enum Code {
+    OK = 0;
+    SPACE_NOT_ENOUGH = 1;
+    FILE_ERROR = 2;
+    CHECKSUM_FAILURE = 3;
+  }
+  Code status = 1;
+}
+
+message FileRemoval {
+  string file_name = 1;
+  string file_type = 2;
+}
+
+message ProtocolError {
+  enum Code {
+    SUCCESS = 0;
+    FAILURE = 1;
+    UNSUPPORTED_BODY = 2;
+  }
+  Code code = 1;
+  string why = 2;
+}
+
+message Acknowledgement {
+  string dummy = 1;
+}
+
+message AsynchronousEvent {
+  bool play_finished = 1;
+}
+
+message Request {
+  WireHeader header = 1;
+
+  oneof body {
+    Ping ping = 10;
+    QueryToken device_information_query = 100;
+    DeviceAuthQuery device_authentication_query = 101;
+    QueryToken system_configuration_query = 102;
+    QueryToken media_catalog_query = 103;
+    QueryToken user_configuration_query = 104;
+    UserConfiguration user_configuration = 200;
+    OverlayLayout overlay_layout = 201;
+    MetricBatch metric_batch = 300;
+    TransferBegin transfer_begin = 400;
+    TransferChunk transfer_chunk = 401;
+    TransferEnd transfer_end = 402;
+    FileRemoval file_removal = 403;
+  }
+}
+
+message Response {
+  WireHeader header = 1;
+  ProtocolError error = 2;
+
+  oneof body {
+    Pong pong = 10;
+    DeviceInformation device_information = 500;
+    DeviceAuthentication device_authentication = 501;
+    SystemConfiguration system_configuration = 502;
+    MediaCatalog media_catalog = 503;
+    UserConfiguration user_configuration = 504;
+    Acknowledgement acknowledgement = 600;
+    TransferStatus transfer_begin_status = 800;
+    TransferStatus transfer_chunk_status = 801;
+    TransferStatus transfer_end_status = 802;
+    AsynchronousEvent asynchronous_event = 987;
+  }
+}
