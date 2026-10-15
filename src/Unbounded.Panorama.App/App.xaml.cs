@@ -122,6 +122,10 @@ public partial class App : Application
         var startHidden = e.Args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
         if (!startHidden)
             ShowWindow();
+
+        // We own the single-instance lock, so any older copy is gone or exiting: remove its version folder.
+        var log = _viewModel;
+        _ = Task.Run(() => InstallCleanup.RunAsync(line => Dispatcher.BeginInvoke(() => log.Report(line))));
     }
 
     private void ShowWindow()

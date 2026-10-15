@@ -934,6 +934,9 @@ public sealed partial class MainViewModel : ObservableObject
         return File.Exists(png) ? png : null;
     }
 
+    /// <summary>Adds a line to the Activity log (used by app-level services).</summary>
+    public void Report(string line) => AddLog(line);
+
     private void AddLog(string line)
     {
         LogLines.Add($"{DateTime.Now:HH:mm:ss}  {line}");
