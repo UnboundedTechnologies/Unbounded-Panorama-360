@@ -86,7 +86,7 @@
                         <StackPanel Visibility="{Binding HasBackground, Converter={StaticResource Visible}}">
                             <TextBlock Text="Sizing" Style="{StaticResource Label}" />
                             <ComboBox ItemsSource="{Binding Fits}" SelectedItem="{Binding BackgroundFit}" ItemTemplate="{StaticResource EnumItem}" />
-                            <TextBlock Text="Framing — horizontal / vertical" Style="{StaticResource Label}" />
+                            <TextBlock Text="Framing: horizontal / vertical" Style="{StaticResource Label}" />
                             <Slider Minimum="0" Maximum="1" Value="{Binding CropX, Delay=300}" ToolTip="Which part of a wide source fills the screen" />
                             <Slider Minimum="0" Maximum="1" Value="{Binding CropY, Delay=300}" Margin="0,6,0,0" />
                             <Grid Margin="0,4,0,0" Visibility="{Binding IsVideoBackground, Converter={StaticResource Visible}}">
@@ -193,8 +193,8 @@
                     <Border Style="{StaticResource Sep}" />
                     <Border Background="{StaticResource Field}" CornerRadius="10">
                         <StackPanel Orientation="Horizontal">
-                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsPortrait}" ToolTip="Vertical — for a cooler mounted upright">PORTRAIT</RadioButton>
-                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsLandscape}" ToolTip="Horizontal — the panel's native orientation">LANDSCAPE</RadioButton>
+                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsPortrait}" ToolTip="Vertical, for a cooler mounted upright">PORTRAIT</RadioButton>
+                            <RadioButton Style="{StaticResource Segment}" GroupName="orient" IsChecked="{Binding IsLandscape}" ToolTip="Horizontal, the panel's native orientation">LANDSCAPE</RadioButton>
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Sep}" />

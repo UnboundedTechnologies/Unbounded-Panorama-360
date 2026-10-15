@@ -136,7 +136,7 @@ public sealed partial class MainViewModel : ObservableObject
     public bool IsVideoBackground => HasBackground && !MediaPreparer.IsImage(BackgroundPath!);
     public string BackgroundName => BackgroundDeviceFile is { } f
         ? $"From the cooler: {f}"
-        : HasBackground ? Path.GetFileName(BackgroundPath!) : "No background — black screen";
+        : HasBackground ? Path.GetFileName(BackgroundPath!) : "No background (black screen)";
     public int VisibleCount => Widgets.Count(w => !w.Hidden);
     public string WidgetCount => $"{VisibleCount} / {LayoutCompiler.MaxWidgets} shown";
     public IEnumerable<WidgetViewModel> Selection => Widgets.Where(w => w.IsSelected);
@@ -1255,7 +1255,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         if (!IsConnected)
         {
-            Status = IsKanaliBlocking ? "Close KANALI first — it owns the cooler." : "The cooler is not connected.";
+            Status = IsKanaliBlocking ? "Close KANALI first. It owns the cooler while it runs." : "The cooler is not connected.";
             return;
         }
         IsBusy = true;

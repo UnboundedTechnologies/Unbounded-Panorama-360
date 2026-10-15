@@ -81,7 +81,7 @@ public partial class YouTubeWindow : Window
             TitleText.Text = video.Title;
             MetaText.Text = $"{video.Channel} · {YouTubeImporter.FormatTime(video.DurationSeconds)}";
             BestText.Text = "Best available: " + video.BestDescription
-                + (video.OnlyHdrAvailable ? "  (HDR only — colours may look washed out)" : "");
+                + (video.OnlyHdrAvailable ? "  (HDR only, colours may look washed out)" : "");
 
             _syncing = true;
             StartSlider.Maximum = Math.Max(0, video.DurationSeconds - 1);
@@ -227,7 +227,7 @@ public partial class YouTubeWindow : Window
         _work?.Cancel();
         _frameWork?.Cancel();
         var cts = _work = new CancellationTokenSource();
-        SetBusy(true, "Downloading — you can cancel at any time.");
+        SetBusy(true, "Downloading. You can cancel at any time.");
         RangePanel.IsEnabled = false;
         ImportButton.IsEnabled = false;
         ShowProgress("Starting download…", null, "Connecting to YouTube");

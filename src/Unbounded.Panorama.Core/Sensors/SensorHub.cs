@@ -117,6 +117,10 @@ public sealed class SensorHub : IDisposable
         var value = Value(sensorId);
         if (info is null || value is null || float.IsNaN(value.Value))
             return "--";
+        // LibreHardwareMonitor reports exactly 0 when it cannot read a temperature (e.g. CPU sensors
+        // without administrator rights); no real CPU, GPU or board sensor sits at 0.0 °C.
+        if (info.Type == nameof(SensorType.Temperature) && value.Value == 0f)
+            return "--";
         var v = value.Value;
         var unit = info.Unit;
         if (info.Type == nameof(SensorType.Temperature) && fahrenheit)

@@ -19,7 +19,7 @@
             <StackPanel>
                 <TextBlock Text="IMPORT" Style="{StaticResource Kicker}" />
                 <TextBlock Text="From YouTube" Style="{StaticResource PageTitle}" FontSize="26" />
-                <TextBlock Text="Paste a link. The highest resolution YouTube offers is downloaded — only the part you choose." Foreground="{StaticResource Muted}"
+                <TextBlock Text="Paste a link. The highest resolution YouTube offers is downloaded, only the part you choose." Foreground="{StaticResource Muted}"
                            FontSize="12.5" Margin="0,2,0,14" TextWrapping="Wrap" />
             </StackPanel>
 

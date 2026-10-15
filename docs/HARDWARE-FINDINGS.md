@@ -1,4 +1,4 @@
-# Hardware findings — Panorama `391a:1011`
+# Hardware findings: Panorama `391a:1011`
 
 Verified on a retail Panorama (firmware `v2.0.6.20260713`, app `v2.0.4.20260804`) on Windows 11, 2026-10-15, with the cooler mounted in portrait. Each result was confirmed by device readback and by a photo of the screen.
 
