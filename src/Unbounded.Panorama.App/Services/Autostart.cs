@@ -12,10 +12,11 @@ public static class Autostart
 {
     private const string TaskName = "Unbounded Panorama 360";
 
-    /// <summary>The installed app (always the newest version, through the "current" link).</summary>
-    public static string InstalledExe => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Programs", "UnboundedPanorama360", "current", "UnboundedPanorama360.exe");
+    /// <summary>Where setup.exe installs the app (updates replace it in place).</summary>
+    public static string InstallDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Unbounded Panorama 360");
+
+    public static string InstalledExe => Path.Combine(InstallDir, "UnboundedPanorama360.exe");
 
     /// <summary>What the task should start: the installed app when present, otherwise this executable.</summary>
     public static string TargetExe => File.Exists(InstalledExe)
@@ -44,7 +45,8 @@ public static class Autostart
     /// </summary>
     public static bool EnsureCurrent()
     {
-        if (!IsEnabled() || Run(out var xml, "/Query", "/TN", TaskName, "/XML") != 0)
+        // Only the installed app fixes the task; a development build must never re-point it at itself.
+        if (!File.Exists(InstalledExe) || !IsEnabled() || Run(out var xml, "/Query", "/TN", TaskName, "/XML") != 0)
             return false;
         string? command;
         try

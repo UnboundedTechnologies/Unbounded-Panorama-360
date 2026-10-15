@@ -7,3 +7,6 @@ obj/
 
 # Raw device dumps contain the cooler's serial number and chip id.
 docs/hardware/
+
+# Installer build output
+dist/

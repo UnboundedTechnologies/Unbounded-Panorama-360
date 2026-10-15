@@ -50,6 +50,23 @@ public partial class App : Application
         base.OnStartup(e);
 
         _instanceMutex = new Mutex(true, InstanceName, out var first);
+
+        // --quit (used by the installer and uninstaller): close the running copy cleanly, then exit.
+        if (e.Args.Contains("--quit", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!first)
+                TakeOverFromRunningInstance();
+            try
+            {
+                _instanceMutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+            }
+            Shutdown();
+            return;
+        }
+
         if (!first)
         {
             if (e.Args.Contains("--replace", StringComparer.OrdinalIgnoreCase))
@@ -121,12 +138,7 @@ public partial class App : Application
 
         var startHidden = e.Args.Contains("--tray", StringComparer.OrdinalIgnoreCase);
         if (!startHidden)
-            ShowWindow();
-
-        // We own the single-instance lock, so any older copy is gone or exiting: remove its version folder.
-        var log = _viewModel;
-        _ = Task.Run(() => InstallCleanup.RunAsync(line => Dispatcher.BeginInvoke(() => log.Report(line))));
-    }
+            ShowWindow();    }
 
     private void ShowWindow()
     {

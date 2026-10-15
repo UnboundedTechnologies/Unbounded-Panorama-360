@@ -11,7 +11,9 @@
     <AssemblyName>UnboundedPanorama360</AssemblyName>
     <RootNamespace>Unbounded.Panorama.App</RootNamespace>
     <Product>Unbounded Panorama 360</Product>
-    <Version>0.1.0</Version>
+    <Company>Unbounded Technologies</Company>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
