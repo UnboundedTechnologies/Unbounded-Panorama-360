@@ -97,6 +97,7 @@
                                 <TextBlock Text="{Binding BackgroundName}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,4,0,8" />
                                 <WrapPanel>
                                     <Button Content="Choose image / video…" Style="{StaticResource Chip}" Command="{Binding ChooseBackgroundCommand}" />
+                                    <Button Content="Import from YouTube…" Style="{StaticResource Chip}" Click="OnImportYouTube" />
                                     <Button Content="Clear" Style="{StaticResource Chip}" Command="{Binding ClearBackgroundCommand}"
                                             Visibility="{Binding HasBackground, Converter={StaticResource Visible}}" />
                                 </WrapPanel>

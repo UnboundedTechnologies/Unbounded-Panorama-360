@@ -472,6 +472,29 @@ public sealed partial class MainViewModel : ObservableObject
         SetBackground(dialog.FileName);
     }
 
+    public YouTubeImporter YouTube => _youTube ??= new YouTubeImporter(_storage.DownloadDir);
+    private YouTubeImporter? _youTube;
+
+    /// <summary>Uses a downloaded YouTube section; the start is cut frame-exactly at conversion.</summary>
+    public void UseImportedClip(ImportedClip clip, string? title)
+    {
+        _loading = true;
+        try
+        {
+            BackgroundFit = BackgroundFit.Fill;
+            CropX = 0.5;
+            CropY = 0.5;
+            StartSeconds = Math.Round(clip.OffsetSeconds, 3);
+            DurationSeconds = Math.Round(clip.LengthSeconds, 3);
+        }
+        finally
+        {
+            _loading = false;
+        }
+        BackgroundPath = clip.FilePath;
+        Status = $"Imported “{title}”. Drag the crop sliders to frame it, then Apply.";
+    }
+
     public void SetBackground(string path)
     {
         CropX = 0.5;

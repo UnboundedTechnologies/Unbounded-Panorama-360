@@ -31,23 +31,16 @@ public partial class MainWindow : Window
         };
         PreviewKeyDown += OnKey;
         PreviewMouseWheel += OnWheel;
-        SourceInitialized += (_, _) => UseDarkTitleBar();
+        Services.WindowChrome.UseDarkTitleBar(this);
     }
 
-    /// <summary>Dark caption matching the app instead of the Windows accent colour.</summary>
-    private void UseDarkTitleBar()
+    private void OnImportYouTube(object sender, RoutedEventArgs e)
     {
-        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        var on = 1;
-        DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int)); // DWMWA_USE_IMMERSIVE_DARK_MODE
-        var caption = 0x001F1611; // COLORREF 0x00BBGGRR for #11161F
-        DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int)); // DWMWA_CAPTION_COLOR
-        var border = 0x003A2B23; // #232B3A
-        DwmSetWindowAttribute(hwnd, 34, ref border, sizeof(int)); // DWMWA_BORDER_COLOR
+        var dialog = new YouTubeWindow(_vm.YouTube) { Owner = this, Icon = Icon };
+        Services.WindowChrome.UseDarkTitleBar(dialog);
+        if (dialog.ShowDialog() == true && dialog.Result is { } clip)
+            _vm.UseImportedClip(clip, dialog.VideoTitle);
     }
-
-    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     private void OnScreenMouseDown(object sender, MouseButtonEventArgs e)
     {

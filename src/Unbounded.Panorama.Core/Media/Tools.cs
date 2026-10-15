@@ -6,10 +6,22 @@ public static class Tools
     private static readonly Lazy<string> Ffmpeg = new(() => Find("ffmpeg.exe", "Gyan.FFmpeg"));
     private static readonly Lazy<string> Ffprobe = new(() => Find("ffprobe.exe", "Gyan.FFmpeg"));
     private static readonly Lazy<string> YtDlp = new(() => Find("yt-dlp.exe", "yt-dlp.yt-dlp"));
+    private static readonly Lazy<string?> Deno = new(() =>
+    {
+        try
+        {
+            return Find("deno.exe", "DenoLand.Deno");
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    });
 
     public static string FfmpegPath => Ffmpeg.Value;
     public static string FfprobePath => Ffprobe.Value;
     public static string YtDlpPath => YtDlp.Value;
+    public static string? DenoPath => Deno.Value;
 
     /// <summary>
     /// Order: next to the app (tools\), then the winget package folder, then PATH.
