@@ -221,6 +221,19 @@ public sealed partial class MainViewModel : ObservableObject
         _liveDebounce = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, async (_, _) => { _liveDebounce!.Stop(); await PushLiveAsync(); }, _ui) { IsEnabled = false };
 
         StartWithWindows = Autostart.IsEnabled();
+        // Keep "Start with Windows" pointing at the installed (newest) app, not an older build folder.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (Autostart.EnsureCurrent())
+                    _ui.BeginInvoke(() => AddLog($"Start with Windows now opens {Autostart.TargetExe}"));
+            }
+            catch (Exception ex)
+            {
+                _ui.BeginInvoke(() => AddLog("Could not update Start with Windows: " + ex.Message));
+            }
+        });
         ReloadPresets();
         Load(storage.LoadLayout(), keepSelection: false);
         _history.Record(BuildLayout().ToJson());
