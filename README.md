@@ -20,6 +20,17 @@ Frames are `"TRYX"` + little-endian `uint32` length + a protobuf message (`src/U
 | `391a:1021` | Panorama SE | Same protocol family, untested here |
 | `391a:1031` | Panorama WB | Same protocol family, untested here |
 
+## Install
+
+Requires the .NET 10 SDK, FFmpeg and yt-dlp (for YouTube import) on Windows:
+
+```powershell
+winget install Microsoft.DotNet.SDK.10 Gyan.FFmpeg yt-dlp.yt-dlp
+.\install.ps1            # add -Desktop for a desktop shortcut
+```
+
+`install.ps1` builds the app into `%LocalAppData%\Programs\UnboundedPanorama360\app-<timestamp>`, points the `current` link at it, adds a Start Menu shortcut and starts the new version, which takes over from a running copy. Run it again to update. The app asks for administrator rights because CPU temperature, clocks and power are read through a kernel driver (like HWiNFO). "Start with Windows" uses a scheduled task, so there is no prompt at login.
+
 ## Build
 
 Requires the .NET 10 SDK on Windows.
