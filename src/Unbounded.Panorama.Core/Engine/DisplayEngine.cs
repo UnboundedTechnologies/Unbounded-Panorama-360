@@ -291,7 +291,7 @@ public sealed class DisplayEngine : IAsyncDisposable
     {
         var session = _session!;
         var applied = _applied;
-        if (applied is null || !applied.Widgets.Any(w => LayoutCompiler.IsDynamic(w.Content)))
+        if (applied is null || !applied.Widgets.Any(w => !w.Hidden && LayoutCompiler.IsDynamic(w.Content)))
             return;
         if (!await _apply.WaitAsync(0, token).ConfigureAwait(false))
             return; // skip live values while an apply is running

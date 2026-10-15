@@ -3,9 +3,14 @@ using LibreHardwareMonitor.Hardware;
 
 namespace Unbounded.Panorama.Sensors;
 
-public sealed record SensorInfo(string Id, string Hardware, string Name, string Type, string Unit)
+public sealed record SensorInfo(string Id, string Category, string Hardware, string Name, string Type, string Unit)
 {
-    public string Display => $"{Hardware} › {Name} ({Type})";
+    public string Display => $"{Category} {Hardware} › {Name} ({Type})";
+
+    /// <summary>Group header in the picker, e.g. "CPU · AMD Ryzen 7 9800X3D".</summary>
+    public string Group => $"{Category} · {Hardware}";
+
+    public int CategoryOrder => Array.IndexOf(SensorHub.CategoryOrder, Category) is var i and >= 0 ? i : 99;
 }
 
 /// <summary>
@@ -51,6 +56,7 @@ public sealed class SensorHub : IDisposable
 
     public float? Value(string? sensorId)
     {
+        sensorId = Resolve(sensorId);
         if (sensorId is null)
             return null;
         lock (_gate)
@@ -59,8 +65,49 @@ public sealed class SensorHub : IDisposable
 
     public SensorInfo? Info(string? sensorId)
     {
+        sensorId = Resolve(sensorId);
         lock (_gate)
             return _catalog.FirstOrDefault(s => s.Id == sensorId);
+    }
+
+    public const string RolePrefix = "role:";
+
+    /// <summary>
+    /// Portable sensor references for templates ("role:cpu-temp") are matched to this machine's
+    /// sensors; plain ids pass through.
+    /// </summary>
+    public string? Resolve(string? sensorId)
+    {
+        if (sensorId is null || !sensorId.StartsWith(RolePrefix, StringComparison.Ordinal))
+            return sensorId;
+        var role = sensorId[RolePrefix.Length..];
+        List<SensorInfo> catalog;
+        lock (_gate)
+            catalog = _catalog;
+
+        SensorInfo? Pick(string category, string type, params string[] preferredNames) =>
+            preferredNames.Select(n => catalog.FirstOrDefault(s => s.Category == category && s.Type == type && s.Name.Contains(n, StringComparison.OrdinalIgnoreCase)))
+                .FirstOrDefault(s => s is not null)
+            ?? catalog.FirstOrDefault(s => s.Category == category && s.Type == type);
+
+        var hit = role switch
+        {
+            "cpu-temp" => Pick("CPU", "Temperature", "Tctl", "Package", "CPU", "Core"),
+            "cpu-load" => Pick("CPU", "Load", "CPU Total", "Total"),
+            "cpu-power" => Pick("CPU", "Power", "Package", "CPU"),
+            "cpu-clock" => Pick("CPU", "Clock", "Cores (Average)", "Average", "Core #1"),
+            "gpu-temp" => Pick("GPU", "Temperature", "GPU Core", "Core", "Hot Spot"),
+            "gpu-load" => Pick("GPU", "Load", "GPU Core", "Core", "D3D 3D"),
+            "gpu-power" => Pick("GPU", "Power", "GPU Package", "Package", "Board"),
+            "gpu-clock" => Pick("GPU", "Clock", "GPU Core", "Core"),
+            // Physical RAM ("Total Memory"), not the page-file-inclusive "Virtual Memory".
+            "ram-load" => catalog.FirstOrDefault(s => s.Category == "Memory" && s.Type == "Load" && s.Hardware.Contains("Total", StringComparison.OrdinalIgnoreCase))
+                          ?? Pick("Memory", "Load", "Memory"),
+            "ram-used" => catalog.FirstOrDefault(s => s.Category == "Memory" && s.Type == "Data" && s.Name == "Memory Used" && s.Hardware.Contains("Total", StringComparison.OrdinalIgnoreCase))
+                          ?? Pick("Memory", "Data", "Memory Used", "Used"),
+            _ => null,
+        };
+        return hit?.Id;
     }
 
     /// <summary>Formats a sensor value; "--" when unavailable.</summary>
@@ -96,7 +143,7 @@ public sealed class SensorHub : IDisposable
             var values = new Dictionary<string, float?>();
             var catalog = new List<SensorInfo>();
             foreach (var hardware in _computer.Hardware)
-                Collect(hardware, values, catalog);
+                Collect(hardware, CategoryOf(hardware.HardwareType), values, catalog);
 
             var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
             var gpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd)
@@ -123,7 +170,21 @@ public sealed class SensorHub : IDisposable
         Updated?.Invoke();
     }
 
-    private static void Collect(IHardware hardware, Dictionary<string, float?> values, List<SensorInfo> catalog)
+    public static readonly string[] CategoryOrder = ["CPU", "GPU", "Memory", "Motherboard", "Storage", "Network", "Other"];
+
+    private static string CategoryOf(HardwareType type) => type switch
+    {
+        HardwareType.Cpu => "CPU",
+        HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel => "GPU",
+        HardwareType.Memory => "Memory",
+        HardwareType.Motherboard or HardwareType.SuperIO or HardwareType.EmbeddedController => "Motherboard",
+        HardwareType.Storage => "Storage",
+        HardwareType.Network => "Network",
+        _ => "Other",
+    };
+
+    /// <summary>Sub-hardware (e.g. the Super I/O chip) is filed under its parent's category.</summary>
+    private static void Collect(IHardware hardware, string category, Dictionary<string, float?> values, List<SensorInfo> catalog)
     {
         hardware.Update();
         foreach (var sensor in hardware.Sensors)
@@ -132,10 +193,10 @@ public sealed class SensorHub : IDisposable
                 continue;
             var id = sensor.Identifier.ToString();
             values[id] = sensor.Value;
-            catalog.Add(new SensorInfo(id, hardware.Name, sensor.Name, sensor.SensorType.ToString(), UnitOf(sensor.SensorType)));
+            catalog.Add(new SensorInfo(id, category, hardware.Name.Trim(), sensor.Name, sensor.SensorType.ToString(), UnitOf(sensor.SensorType)));
         }
         foreach (var sub in hardware.SubHardware)
-            Collect(sub, values, catalog);
+            Collect(sub, category, values, catalog);
     }
 
     private static string UnitOf(SensorType type) => type switch

@@ -20,7 +20,7 @@ public partial class YouTubeWindow : Window
     public ImportedClip? Result { get; private set; }
     public string? VideoTitle => _video?.Title;
 
-    public YouTubeWindow(YouTubeImporter importer)
+    public YouTubeWindow(YouTubeImporter importer, string? initialUrl = null)
     {
         InitializeComponent();
         _importer = importer;
@@ -32,6 +32,13 @@ public partial class YouTubeWindow : Window
 
         Loaded += (_, _) =>
         {
+            if (initialUrl is not null)
+            {
+                // Dropped link: fetch straight away.
+                UrlBox.Text = initialUrl;
+                OnFetch(this, new RoutedEventArgs());
+                return;
+            }
             // Pre-fill from the clipboard when it holds a YouTube link.
             try
             {

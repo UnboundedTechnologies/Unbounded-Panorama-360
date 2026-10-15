@@ -38,6 +38,11 @@ public sealed partial class WidgetViewModel : ObservableObject
     [ObservableProperty] public partial string PreviewText { get; set; } = "";
 
     [ObservableProperty] public partial bool IsSelected { get; set; }
+    [ObservableProperty] public partial bool Hidden { get; set; }
+    [ObservableProperty] public partial bool Locked { get; set; }
+
+    public Box Bounds => new(X, Y, Width, Height);
+    public double Opacity => Hidden ? 0.25 : 1;
 
     public int Height => (int)Math.Ceiling(Size * 1.3);
     public bool IsTextContent => Content == WidgetContent.Text;
@@ -121,8 +126,11 @@ public sealed partial class WidgetViewModel : ObservableObject
             case nameof(Text) or nameof(PreviewText):
                 OnPropertyChanged(nameof(Title));
                 break;
+            case nameof(Hidden):
+                OnPropertyChanged(nameof(Opacity));
+                break;
         }
-        if (e.PropertyName is not (nameof(PreviewText) or nameof(IsSelected) or nameof(Title) or nameof(Kind)
+        if (e.PropertyName is not (nameof(PreviewText) or nameof(IsSelected) or nameof(Title) or nameof(Opacity) or nameof(Bounds) or nameof(Kind)
             or nameof(IsTextContent) or nameof(IsSensorContent) or nameof(IsTimeContent) or nameof(UsesAffixes)
             or nameof(Height) or nameof(BadgeCorner) or nameof(FontWeightValue) or nameof(HorizontalAlign)
             or nameof(ColorBrush) or nameof(BadgeBrush)))
@@ -163,6 +171,8 @@ public sealed partial class WidgetViewModel : ObservableObject
         Badge = Badge,
         BadgeFrom = BadgeFrom,
         BadgeTo = BadgeTo,
+        Hidden = Hidden,
+        Locked = Locked,
     };
 
     public static WidgetViewModel FromModel(Widget w) => new()
@@ -186,12 +196,15 @@ public sealed partial class WidgetViewModel : ObservableObject
         Badge = w.Badge,
         BadgeFrom = w.BadgeFrom,
         BadgeTo = w.BadgeTo,
+        Hidden = w.Hidden,
+        Locked = w.Locked,
     };
 
     public WidgetViewModel Duplicate()
     {
         var model = ToModel();
         model.Id = Guid.NewGuid();
+        model.Locked = false;
         model.X += 40;
         model.Y += 40;
         return FromModel(model);

@@ -16,6 +16,7 @@ public sealed class AppStorage
     private readonly string _settingsFile;
     private Settings _settings;
 
+    public string RoamingDir { get; }
     public string MediaCacheDir { get; }
     public string PreviewDir { get; }
     public string DownloadDir { get; }
@@ -24,7 +25,7 @@ public sealed class AppStorage
     {
         var roaming = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UnboundedPanorama360");
         var local = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UnboundedPanorama360");
-        Directory.CreateDirectory(roaming);
+        RoamingDir = Directory.CreateDirectory(roaming).FullName;
         MediaCacheDir = Directory.CreateDirectory(Path.Combine(local, "media")).FullName;
         PreviewDir = Directory.CreateDirectory(Path.Combine(local, "previews")).FullName;
         DownloadDir = Directory.CreateDirectory(Path.Combine(local, "downloads")).FullName;

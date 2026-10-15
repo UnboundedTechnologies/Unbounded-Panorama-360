@@ -74,6 +74,12 @@ public sealed class Widget
     public string BadgeFrom { get; set; } = "#A92F2C";
     public string BadgeTo { get; set; } = "#CB6236";
 
+    /// <summary>Hidden widgets stay in the design but are not sent to the cooler.</summary>
+    public bool Hidden { get; set; }
+
+    /// <summary>Locked widgets cannot be moved or resized on the canvas.</summary>
+    public bool Locked { get; set; }
+
     /// <summary>Height of the firmware group box; text sits inside it.</summary>
     [JsonIgnore]
     public int Height => (int)Math.Ceiling(Size * 1.3);
@@ -132,8 +138,8 @@ public sealed class ScreenLayout
         [
             new Widget { Content = WidgetContent.Clock, Format = "HH:mm", X = 90, Y = 120, Width = 900, Size = 220, Weight = FontWeightName.Light, Align = TextAlign.Center },
             new Widget { Content = WidgetContent.Date, Format = "dddd d MMMM", X = 90, Y = 420, Width = 900, Size = 56, Align = TextAlign.Center, Color = "#BFC7D5" },
-            new Widget { Content = WidgetContent.Sensor, SensorId = "/amdcpu/0/temperature/2", Prefix = "CPU  ", X = 90, Y = 640, Width = 900, Size = 110, Weight = FontWeightName.Medium, Align = TextAlign.Center, Color = "#FF7A59" },
-            new Widget { Content = WidgetContent.Sensor, SensorId = "/gpu-nvidia/0/temperature/0", Prefix = "GPU  ", X = 90, Y = 820, Width = 900, Size = 110, Weight = FontWeightName.Medium, Align = TextAlign.Center, Color = "#76B900" },
+            new Widget { Content = WidgetContent.Sensor, SensorId = "role:cpu-temp", Prefix = "CPU  ", X = 90, Y = 640, Width = 900, Size = 110, Weight = FontWeightName.Medium, Align = TextAlign.Center, Color = "#FF7A59" },
+            new Widget { Content = WidgetContent.Sensor, SensorId = "role:gpu-temp", Prefix = "GPU  ", X = 90, Y = 820, Width = 900, Size = 110, Weight = FontWeightName.Medium, Align = TextAlign.Center, Color = "#76B900" },
         ],
     };
 }

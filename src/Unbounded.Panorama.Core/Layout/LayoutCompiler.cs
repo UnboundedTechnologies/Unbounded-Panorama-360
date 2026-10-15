@@ -30,15 +30,19 @@ public static class LayoutCompiler
         return pool;
     }
 
+    /// <summary>The widgets actually sent to the cooler, in id-pool order.</summary>
+    public static List<Widget> Visible(ScreenLayout layout) => layout.Widgets.Where(w => !w.Hidden).ToList();
+
     public static OverlayLayout Compile(ScreenLayout layout, Func<Widget, string> textOf)
     {
-        if (layout.Widgets.Count > MaxWidgets)
-            throw new InvalidOperationException($"The cooler supports at most {MaxWidgets} widgets; this layout has {layout.Widgets.Count}.");
+        var widgets = Visible(layout);
+        if (widgets.Count > MaxWidgets)
+            throw new InvalidOperationException($"The cooler supports at most {MaxWidgets} visible widgets; this layout has {widgets.Count}.");
 
         var overlay = new OverlayLayout();
-        for (var i = 0; i < layout.Widgets.Count; i++)
+        for (var i = 0; i < widgets.Count; i++)
         {
-            var w = layout.Widgets[i];
+            var w = widgets[i];
             var (groupId, labelId) = IdPool[i];
             var x = Math.Clamp(w.X, 0, layout.CanvasWidth - 1);
             var y = Math.Clamp(w.Y, 0, layout.CanvasHeight - 1);
@@ -81,9 +85,10 @@ public static class LayoutCompiler
     public static MetricBatch CompileUpdates(ScreenLayout layout, Func<Widget, string> textOf)
     {
         var batch = new MetricBatch();
-        for (var i = 0; i < layout.Widgets.Count && i < MaxWidgets; i++)
+        var widgets = Visible(layout);
+        for (var i = 0; i < widgets.Count && i < MaxWidgets; i++)
         {
-            var w = layout.Widgets[i];
+            var w = widgets[i];
             if (!IsDynamic(w.Content))
                 continue;
             var (groupId, labelId) = IdPool[i];

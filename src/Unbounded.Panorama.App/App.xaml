@@ -28,6 +28,7 @@
             <local:EngineStateBrush x:Key="StateBrush" />
             <local:BadgePadding x:Key="BadgePadding" />
             <local:EnumLabel x:Key="EnumLabel" />
+            <local:EqualsConverter x:Key="Is" />
 
             <Style TargetType="TextBlock">
                 <Setter Property="Foreground" Value="{StaticResource Fg}" />
@@ -306,6 +307,133 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- Toolbar icon buttons -->
+            <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+            <Style x:Key="Tool" TargetType="Button">
+                <Setter Property="Width" Value="34" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="Foreground" Value="{StaticResource Fg}" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="ToolTipService.InitialShowDelay" Value="250" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="Transparent" CornerRadius="7">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#1F2838" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#26324A" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="b" Property="Opacity" Value="0.35" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="ToolToggle" TargetType="ToggleButton">
+                <Setter Property="Height" Value="32" />
+                <Setter Property="MinWidth" Value="34" />
+                <Setter Property="Padding" Value="8,0" />
+                <Setter Property="Foreground" Value="{StaticResource Fg}" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="b" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#1F2838" />
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#1D3B6E" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- Segmented choice (RadioButton) -->
+            <Style x:Key="Segment" TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="12,6" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="b" Background="Transparent" CornerRadius="7" Padding="{TemplateBinding Padding}" Margin="2">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource Fg}" />
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="{StaticResource AccentGradient}" />
+                                    <Setter Property="Foreground" Value="#06101F" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="ChipToggle" TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{StaticResource Muted}" />
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Margin" Value="0,0,5,5" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="b" Background="{StaticResource Field}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="11" Padding="9,3">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#1D3B6E" />
+                                    <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource Accent}" />
+                                    <Setter Property="Foreground" Value="{StaticResource Fg}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Alignment icons (16×16, drawn) -->
+            <Style x:Key="IconPath" TargetType="Path">
+                <Setter Property="Width" Value="16" />
+                <Setter Property="Height" Value="16" />
+                <Setter Property="Stretch" Value="None" />
+                <Setter Property="Fill" Value="{StaticResource Fg}" />
+                <Setter Property="Stroke" Value="{StaticResource Accent2}" />
+                <Setter Property="StrokeThickness" Value="1.5" />
+            </Style>
+            <Geometry x:Key="IcoAlignLeft">M1.5,1 V15 M3,3 H13 V6 H3 Z M3,10 H9 V13 H3 Z</Geometry>
+            <Geometry x:Key="IcoAlignCenterH">M8,1 V15 M3,3 H13 V6 H3 Z M5,10 H11 V13 H5 Z</Geometry>
+            <Geometry x:Key="IcoAlignRight">M14.5,1 V15 M3,3 H13 V6 H3 Z M7,10 H13 V13 H7 Z</Geometry>
+            <Geometry x:Key="IcoAlignTop">M1,1.5 H15 M3,3 H6 V13 H3 Z M10,3 H13 V9 H10 Z</Geometry>
+            <Geometry x:Key="IcoAlignMiddle">M1,8 H15 M3,3 H6 V13 H3 Z M10,5 H13 V11 H10 Z</Geometry>
+            <Geometry x:Key="IcoAlignBottom">M1,14.5 H15 M3,3 H6 V13 H3 Z M10,7 H13 V13 H10 Z</Geometry>
+            <Geometry x:Key="IcoDistH">M1,1 V15 M15,1 V15 M4.5,4 H7 V12 H4.5 Z M9,4 H11.5 V12 H9 Z</Geometry>
+            <Geometry x:Key="IcoDistV">M1,1 H15 M1,15 H15 M4,4.5 H12 V7 H4 Z M4,9 H12 V11.5 H4 Z</Geometry>
+            <Geometry x:Key="IcoMatchW">M1,4 V12 M15,4 V12 M2,8 H14 M2,8 L5,5.5 M2,8 L5,10.5 M14,8 L11,5.5 M14,8 L11,10.5</Geometry>
+            <Geometry x:Key="IcoCenterScreen">M8,1 V4 M8,12 V15 M1,8 H4 M12,8 H15 M5,5 H11 V11 H5 Z</Geometry>
+            <Geometry x:Key="IcoMagnet">M3.5,2 V8.5 A4.5,4.5 0 0 0 12.5,8.5 V2 M3.5,4.5 H6.5 M9.5,4.5 H12.5 M6.5,2 V8.5 A1.5,1.5 0 0 0 9.5,8.5 V2</Geometry>
+            <Geometry x:Key="IcoCurve">M1,3 H15 M1,9 Q8,9 15,15</Geometry>
 
             <!-- Thin scrollbars -->
             <Style TargetType="ScrollBar">

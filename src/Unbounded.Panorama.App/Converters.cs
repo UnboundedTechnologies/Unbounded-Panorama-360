@@ -54,6 +54,16 @@ public sealed class BadgePadding : IMultiValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>True when the bound value equals the parameter; ConvertBack returns the parameter when checked.</summary>
+public sealed class EqualsConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(value?.ToString(), parameter?.ToString(), StringComparison.Ordinal);
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? parameter! : Binding.DoNothing;
+}
+
 public sealed class EnumLabel : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
