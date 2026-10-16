@@ -154,6 +154,7 @@ begin
     InstallDependency('ffmpeg', 'FFmpeg (video conversion)', Failed);
     InstallDependency('ytdlp', 'yt-dlp and Deno (YouTube import)', Failed);
     InstallDependency('pawnio', 'PawnIO driver (CPU temperature, clocks, power)', Failed);
+    InstallDependency('openrgb', 'OpenRGB (ARGB lighting of every brand)', Failed);
     if not ConfigureTasks() then
       Failed := Failed + #13#10 + '  - Start with Windows and the no-prompt shortcut (Windows Task Scheduler)';
     if Failed <> '' then

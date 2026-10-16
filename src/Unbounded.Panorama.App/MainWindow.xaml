@@ -122,6 +122,8 @@
                         <RadioButton Style="{StaticResource Nav}" GroupName="nav" Content="LIBRARY" Tag="&#xE8F1;"
                                      IsChecked="{Binding CurrentPage, Converter={StaticResource Is}, ConverterParameter=Library}"
                                      Checked="OnLibraryChecked" />
+                        <RadioButton Style="{StaticResource Nav}" GroupName="nav" Content="ARGB" Tag="&#xE790;"
+                                     IsChecked="{Binding CurrentPage, Converter={StaticResource Is}, ConverterParameter=Lighting}" />
                         <RadioButton Style="{StaticResource Nav}" GroupName="nav" Content="SETTINGS" Tag="&#xE713;"
                                      IsChecked="{Binding CurrentPage, Converter={StaticResource Is}, ConverterParameter=Settings}" />
                     </StackPanel>
@@ -129,6 +131,7 @@
                     <Grid Grid.Column="1">
                         <views:StudioView x:Name="Studio" Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Studio}" />
                         <views:LibraryView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Library}" />
+                        <views:LightingView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Lighting}" />
                         <views:SettingsView Style="{StaticResource Page}" Visibility="{Binding CurrentPage, Converter={StaticResource IsVisible}, ConverterParameter=Settings}" />
                     </Grid>
                 </Grid>

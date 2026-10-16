@@ -19,8 +19,7 @@ public class ColorPickerTests
         {
             try
             {
-                if (Application.Current is null)
-                    new Unbounded.Panorama.App.App().InitializeComponent();
+                TestTheme.Ensure();
                 action();
             }
             catch (Exception ex)

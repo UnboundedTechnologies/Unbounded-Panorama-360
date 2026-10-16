@@ -34,7 +34,7 @@ The official KANALI app gives you **three metrics in fixed slots, horizontally o
 | Where values can go | 3 fixed slots | **Anywhere, up to 24 elements** |
 | Vertical (portrait) cooler | Horizontal only | **Upright, as mounted** |
 
-And on top of that: a different photo or video on the top and on the curved front, your own text with badges in any colour, YouTube import in the best available quality, free drawing, presets, a live video preview and a media library. **All free and open source.**
+And on top of that: control of every RGB device in your PC, a different photo or video on the top and on the curved front, your own text with badges in any colour, YouTube import in the best available quality, free drawing, presets, a live video preview and a media library. **All free and open source.**
 
 <p align="center">
   <img src="docs/images/features.svg" alt="Anything anywhere, two media at once, upright as mounted" width="100%">
@@ -56,6 +56,13 @@ And on top of that: a different photo or video on the top and on the curved fron
 - **YouTube import**: paste a link, pick the moment and the length, and it downloads in the best quality YouTube offers.
 - **See it move**: the editor plays your video exactly as the cooler will, and the library previews every clip.
 
+### 🌈 All your RGB in one place
+- **Every RGB device of every major brand** in one ARGB tab: motherboard and its ARGB headers, RAM, graphics card, fans, keyboards and more, detected through the free OpenRGB service.
+- **Sync everything to one look** in one click, or give each device and zone its own effect, colour, speed and brightness.
+- **Fan hubs and LED strips on ARGB headers**: set how many LEDs are connected, name the header, and they join in.
+- **Profiles** to switch looks, restored automatically at start-up and after sleep, and saved into devices that have memory for it.
+- **Replaces Armoury Crate's lighting** with one click (the rest of Armoury Crate stays).
+
 ### ⚡ Fast and invisible
 - **Opens in about a second**, with no UAC prompt, and can start with Windows straight into the tray.
 - **Prepares your design in the background** while you edit, so pressing Apply usually only uploads.
@@ -67,7 +74,7 @@ And on top of that: a different photo or video on the top and on the curved fron
 
 1. **Download** `UnboundedPanorama360-Setup-<version>.exe` from the [latest release](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest).
 2. **Close KANALI** (only one program can talk to the cooler at a time).
-3. **Run the setup.** It installs everything it needs, only if missing: FFmpeg for video, yt-dlp and Deno for YouTube, and the PawnIO driver for CPU temperature, clocks and power. .NET is included.
+3. **Run the setup.** It installs everything it needs, only if missing: FFmpeg for video, yt-dlp and Deno for YouTube, the PawnIO driver for CPU temperature, clocks and power, and OpenRGB for the ARGB tab. .NET is included.
 
 Windows SmartScreen may say the publisher is unknown, because the installer is not code-signed. Click **More info**, then **Run anyway**.
 
@@ -114,7 +121,7 @@ The app needs administrator rights because CPU sensors are read through a kernel
 
 ## Credits
 
-Protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). Unbounded Panorama 360 is an independent Windows implementation and is not affiliated with TRYX or KANALI.
+Protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). RGB devices are driven through [OpenRGB](https://openrgb.org) (GPL-2.0, installed separately as its own service, not bundled) using [OpenRGB.NET](https://github.com/diogotr7/OpenRGB.NET) (MIT). Unbounded Panorama 360 is an independent Windows implementation and is not affiliated with TRYX or KANALI.
 
 ## License
 

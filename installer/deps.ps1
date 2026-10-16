@@ -4,7 +4,7 @@
     Called by setup.exe. Exit codes: 0 = present or installed, 1 = install failed, 2 = winget missing.
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('ffmpeg', 'ytdlp', 'pawnio')][string]$Component,
+    [Parameter(Mandatory)][ValidateSet('ffmpeg', 'ytdlp', 'pawnio', 'openrgb')][string]$Component,
     [string]$Log
 )
 
@@ -60,5 +60,14 @@ switch ($Component) {
         if (Test-PawnIO) { Write-Log 'already present'; exit 0 }
         Install-WingetPackage 'namazso.PawnIO' | Out-Null
         if (Test-PawnIO) { exit 0 } else { exit 1 }
+    }
+    'openrgb' {
+        # OpenRGB installs a Windows service ("OpenRGB") that detects and drives RGB devices of every
+        # brand it supports; the ARGB page talks to it on 127.0.0.1:6742.
+        sc.exe query OpenRGB | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Log 'already present'; exit 0 }
+        Install-WingetPackage 'OpenRGB.OpenRGB' | Out-Null
+        sc.exe query OpenRGB | Out-Null
+        if ($LASTEXITCODE -eq 0) { exit 0 } else { exit 1 }
     }
 }

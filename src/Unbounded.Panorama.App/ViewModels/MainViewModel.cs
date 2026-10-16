@@ -100,6 +100,9 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] public partial string GpuTempText { get; set; } = "--";
     public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
 
+    /// <summary>The ARGB page (all RGB devices through OpenRGB).</summary>
+    public LightingViewModel Lighting { get; }
+
     // Library
     public ObservableCollection<LibraryItemViewModel> LibraryItems { get; } = [];
     public ObservableCollection<DeviceMediaViewModel> DeviceItems { get; } = [];
@@ -258,6 +261,8 @@ public sealed partial class MainViewModel : ObservableObject
                 _ui.BeginInvoke(() => AddLog("Could not update Start with Windows: " + ex.Message));
             }
         });
+        Lighting = new LightingViewModel(storage.RoamingDir, _ui, line => _ui.BeginInvoke(() => AddLog(line)));
+        Lighting.Start();
         ReloadPresets();
         Load(storage.LoadLayout(), keepSelection: false);
         _history.Record(BuildLayout().ToJson());
@@ -2299,6 +2304,7 @@ public sealed partial class MainViewModel : ObservableObject
             cts?.Cancel();
         _preconvertDebounce?.Stop();
         _preparer.CancelAll();
+        Lighting.Dispose();
         _tick.Stop();
         CommitNow();
         _storage.SaveLayout(BuildLayout());
