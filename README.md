@@ -7,18 +7,21 @@
   <img alt="Open source" src="https://img.shields.io/badge/open%20source-free%20forever-8B5CF6?style=for-the-badge">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-3DDC97?style=for-the-badge"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-4F8CFF?style=for-the-badge&logo=windows11&logoColor=white">
+  <a href="docs/CONTAINER.md"><img alt="Proxmox and Linux" src="https://img.shields.io/badge/Proxmox%20%7C%20Linux-container-E57000?style=for-the-badge&logo=proxmox&logoColor=white"></a>
 </p>
 
-<h3 align="center">Your cooler has a gorgeous curved AMOLED screen. Use all of it.</h3>
+<h3 align="center">Your cooler has a gorgeous screen. Use all of it.</h3>
 
 <p align="center">
-  <b>Unbounded Panorama 360</b> is the free, open source studio for TRYX Panorama coolers.<br>
+  <b>Unbounded Panorama 360</b> is the free, open source studio for cooler screens:<br>
+  the curved AMOLED of <b>TRYX Panorama</b> coolers on Windows, and <b>Thermalright</b> screens on a home server.<br>
   Put live temperatures, clocks, your own text, photos and videos <b>anywhere</b> on the screen,<br>
-  upright on a vertical cooler, with a different image on the top and on the curved front.
+  and control every RGB device in the machine from the same place.
 </p>
 
 <p align="center">
   <a href="https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest"><b>⬇ Download the installer</b></a>
+  &nbsp;·&nbsp; <a href="#container-edition">Run it on a server</a>
   &nbsp;·&nbsp; <a href="#everything-it-does">See what it does</a>
   &nbsp;·&nbsp; <a href="#open-source">It is open source</a>
 </p>
@@ -35,6 +38,8 @@ The official KANALI app gives you **three metrics in fixed slots, horizontally o
 | Vertical (portrait) cooler | Horizontal only | **Upright, as mounted** |
 
 And on top of that: control of every RGB device in your PC, a different photo or video on the top and on the curved front, your own text with badges in any colour, YouTube import in the best available quality, free drawing, presets, a live video preview and a media library. **All free and open source.**
+
+Cooler in a home server instead? The **container edition** runs on Proxmox (or any Linux), drives **Thermalright screens**, and gives you the studio **in your browser**, with live statistics for the whole server.
 
 <p align="center">
   <img src="docs/images/features.svg" alt="Anything anywhere, two media at once, upright as mounted" width="100%">
@@ -74,7 +79,19 @@ And on top of that: control of every RGB device in your PC, a different photo or
 - **Live values update every second** on the cooler, without re-sending your design.
 - **Cleans up after itself**: old conversions are deleted automatically, only what is useful is kept.
 
+### 🖥️ On your home server
+- **The studio in any browser**, on a computer, tablet or phone: a **live preview** of exactly what the screen shows, updated as you drag.
+- **Text and live values anywhere**, badges, any colour (black included), alignment, four font weights, and **free drawing** right on the screen.
+- **Pictures and videos as background**: drop a file on the screen, move it and zoom with the mouse, pick the part of a video to loop.
+- **YouTube import** in the best available quality, and a **library** of everything you uploaded.
+- **Server statistics** for your widgets: CPU, NVMe and RAM temperatures, plus host CPU, memory, load, uptime, network speed, storage and **every VM and container** through a read-only Proxmox token.
+- **ARGB for the server** too: motherboard headers, fan hubs and every USB RGB device OpenRGB supports, with sync, profiles and the automatic check and repair.
+- **Runs by itself**: starts with the server, restores the design and the lighting, and uses about 6 % of one CPU core.
+- **Optional password** for the page.
+
 ## Get it
+
+### 💻 On Windows (TRYX Panorama)
 
 1. **Download** `UnboundedPanorama360-Setup-<version>.exe` from the [latest release](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/releases/latest).
 2. **Close KANALI** (only one program can talk to the cooler at a time).
@@ -84,17 +101,28 @@ Windows SmartScreen may say the publisher is unknown, because the installer is n
 
 Updating is just as easy: run a newer setup and it updates in place, keeping your designs, presets and library. Uninstall any time from Windows Settings, Apps.
 
+<a id="container-edition"></a>
+
 ### 🖥️ On a home server: the container edition
 
-Cooler screen in a server? The **container edition** runs in a small Proxmox (or any Linux) container and gives you the same studio **in your browser**: live preview, text and live values, YouTube import, drawing, and the ARGB page. It shows server statistics too (host CPU, memory, network, storage, every VM and container) and starts with the server. It drives **Thermalright screens** (Frozen Warframe Pro, GrandVision, Mjolnir Vision) and every RGB device OpenRGB supports.
+For **Thermalright screens** (Frozen Warframe Pro, GrandVision, Mjolnir Vision: USB `87ad:70db`) in a Proxmox or Linux machine.
 
-Setup takes a few minutes: see the [container guide](docs/CONTAINER.md).
+1. **Create a small Debian 13 container** (unprivileged, 2 cores, 1 GB of memory) and pass the screen and your USB RGB controller through. A tiny host service keeps the passthrough right after every reboot.
+2. **Install inside the container**:
+   ```sh
+   curl -fsSLO https://raw.githubusercontent.com/UnboundedTechnologies/Unbounded-Panorama-360/main/deploy/container/install.sh
+   sh install.sh
+   ```
+   It installs FFmpeg, yt-dlp and Deno, OpenRGB 1.1 and the app, with services that start at boot.
+3. **Open** `http://<container address>:8360` from any browser on your network.
+
+The [container guide](docs/CONTAINER.md) has every command, including the optional read-only Proxmox token for server statistics. Running `install.sh` again updates everything and keeps your designs, library and lighting.
 
 ## Open source
 
 Unbounded Panorama 360 is **free and open source** under the [MIT license](LICENSE). Every line of code is right here: read it, build it, change it, share it.
 
-- **No account, no telemetry, no ads.** The app talks to your cooler over USB and to nothing else (except YouTube and winget when you ask it to).
+- **No account, no telemetry, no ads.** The app talks to your cooler over USB and to nothing else (except YouTube and winget when you ask it to, and on a server, the Proxmox API if you give it a read-only token).
 - **Contributions are welcome.** Found a bug, have an idea, own a Panorama SE or WB? Open an [issue](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/issues) or a pull request.
 - **Tested**: 83 automated tests cover layout, snapping, video conversion, the two-media composition, lighting and the container edition's screen protocol.
 
@@ -107,7 +135,12 @@ winget install Microsoft.DotNet.SDK.10 JRSoftware.InnoSetup
 dotnet build -c Release              # the app
 dotnet test -c Release               # the tests (FFmpeg needed for the video ones)
 .\build-installer.ps1                # the setup, in dist\
+
+# the container edition (any OS with the .NET 10 SDK)
+dotnet publish src/Unbounded.Panorama.Server -c Release -r linux-x64 --self-contained -o dist/server
 ```
+
+The code is shared: `src/Unbounded.Panorama.Core` builds for both Windows and Linux (media, YouTube, layout, lighting), the Windows app is `src/Unbounded.Panorama.App` and the container edition `src/Unbounded.Panorama.Server`.
 
 A read-only hardware probe is included for curious minds (close KANALI first):
 
@@ -127,15 +160,23 @@ RGB goes through the OpenRGB service on `127.0.0.1:6742`. The app works around t
 
 The app needs administrator rights because CPU sensors are read through a kernel driver (like HWiNFO). It still never shows a UAC prompt once installed: setup registers two scheduled tasks with highest privileges, one the shortcuts use and one for "Start with Windows".
 
-| USB ID | Model | Status |
-|---|---|---|
-| `391a:1011` | Panorama | Verified on hardware |
-| `391a:1021` | Panorama SE | Same protocol family, untested |
-| `391a:1031` | Panorama WB | Same protocol family, untested |
+### The container edition
+
+Thermalright screens do not draw anything themselves: they show whatever picture they receive, and go back to their logo after 2 to 3 seconds without one. The server therefore composes every frame (the background's current video frame, the text and values, the drawing) with SkiaSharp and streams it at 24 frames per second through its own libusb driver: raw bulk transfers on endpoint `0x01`, a 64-byte handshake (`12 34 56 78`, command 1) whose reply names the panel, then frames made of a 64-byte header (magic, width, height, command 2, pixel count) and RGB565 pixels, high byte first. A video background is first rendered once as a small clip of exactly the visible part, then looped in real time.
+
+Inside a container, live values come from the host's `hwmon` sensors, and whole-server figures from the Proxmox API with a token that only has the read-only PVEAuditor role. OpenRGB runs as a service in the container, listening only on `127.0.0.1`.
+
+| USB ID | Cooler | App | Status |
+|---|---|---|---|
+| `391a:1011` | TRYX Panorama | Windows | Verified on hardware |
+| `391a:1021` | TRYX Panorama SE | Windows | Same protocol family, untested |
+| `391a:1031` | TRYX Panorama WB | Windows | Same protocol family, untested |
+| `87ad:70db` | Thermalright Frozen Warframe Pro (320×320) | Container | Verified on hardware |
+| `87ad:70db` | Thermalright GrandVision, Mjolnir Vision (480×480) | Container | Same protocol, untested |
 
 ## Credits
 
-Protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). RGB devices are driven through [OpenRGB](https://openrgb.org) (GPL-2.0, installed separately as its own service, not bundled) using [OpenRGB.NET](https://github.com/diogotr7/OpenRGB.NET) (MIT). Unbounded Panorama 360 is an independent Windows implementation and is not affiliated with TRYX or KANALI.
+TRYX protocol knowledge comes from the clean-room research in [DXVSI/Tryx-Linux-GUI](https://github.com/DXVSI/Tryx-Linux-GUI) (MIT). The Thermalright handshake is documented in the protocol notes of [thermalright-trcc-linux](https://github.com/Lexonight1/thermalright-trcc-linux); the frame format was read from what the device does on the wire, and the driver here is written from scratch (no code is shared). RGB devices are driven through [OpenRGB](https://openrgb.org) (GPL-2.0, installed separately as its own service, not bundled) using [OpenRGB.NET](https://github.com/diogotr7/OpenRGB.NET) (MIT). Frames in the container edition are drawn with [SkiaSharp](https://github.com/mono/SkiaSharp) (MIT). Unbounded Panorama 360 is an independent implementation and is not affiliated with TRYX, KANALI or Thermalright.
 
 ## License
 
