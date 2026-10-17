@@ -175,3 +175,21 @@ button.on { border-color: var(--accent); background: var(--select); }
   main { padding: 16px; }
   .two { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------- YouTube section picker */
+.timeline { position: relative; height: 38px; cursor: pointer; touch-action: none; user-select: none; }
+.timeline .track { position: absolute; left: 0; right: 0; top: 14px; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .08); border: 1px solid var(--line); }
+.timeline .range { position: absolute; top: 6px; height: 26px; min-width: 6px; border-radius: 7px; background: linear-gradient(90deg, rgba(0, 229, 255, .55), rgba(139, 92, 246, .55)); border: 1px solid var(--accent); cursor: grab; }
+.timeline .range:active { cursor: grabbing; }
+.timeline .handle { position: absolute; top: -4px; width: 12px; height: 32px; border-radius: 6px; background: var(--fg); box-shadow: 0 0 0 2px var(--accent); cursor: ew-resize; }
+.timeline .handle.l { left: -7px; }
+.timeline .handle.r { right: -7px; }
+.readout { font-size: 13px; }
+.readout b { color: var(--accent); font-family: "Rajdhani", sans-serif; font-size: 16px; letter-spacing: .03em; }
+.frames { display: grid; grid-template-columns: repeat(3, minmax(0, 220px)); gap: 10px; }
+.frame { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #000; border: 1px solid var(--line); }
+.frame img, .frame video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .2s; }
+.frame.loop { border-color: var(--line-hover); }
+.frame-label { position: absolute; top: 6px; left: 6px; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, .65); z-index: 1; }
+.frame-note { position: absolute; bottom: 6px; right: 6px; font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, .65); z-index: 1; }
+@media (max-width: 720px) { .frames { grid-template-columns: 1fr 1fr; } .frame.loop { grid-column: span 2; } }

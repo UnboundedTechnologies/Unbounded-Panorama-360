@@ -589,7 +589,7 @@ function Library(root) {
   const yt = youtubeCard(() => refreshJobs());
   root.append(
     h("div", { class: "head" }, h("div", {}, h("h1", {}, "Library"), h("div", { class: "muted" }, "Everything you can put on the screen. Videos play when you point at them."))),
-    h("div", { class: "two", style: { alignItems: "start" } }, h("div", { class: "card stack" }, h("h2", {}, "Add files"), drop), yt),
+    h("div", { class: "card stack" }, h("h2", {}, "Add files"), drop), yt,
     jobsBox, h("div", { style: { height: "14px" } }), grid);
 
   async function upload(files) {
@@ -612,7 +612,19 @@ function Library(root) {
       h("span", { class: "badge" + (i.isImage ? "" : " video") }, i.isImage ? "PHOTO" : "VIDEO " + fmtTime(i.duration)));
     if (!i.isImage) {
       let video;
-      thumb.addEventListener("mouseenter", () => { video = h("video", { src: `/api/library/${i.id}/file`, muted: true, loop: true, autoplay: true, playsInline: true }); thumb.append(video); });
+      thumb.addEventListener("mouseenter", () => { video = h("video", { src: `/api/library/${i.id}/file`, muted: true, autoplay: true, playsInline: true });
+        // Only the item's own part, in a loop. A YouTube section keeps its original timestamps; some browsers
+        // show those (the file then "starts" at fileStart), others count from 0.
+        let from = 0, to = Infinity;
+        video.addEventListener("loadedmetadata", () => {
+          const absolute = i.fileStart > 0.5 && video.duration >= i.fileStart + i.clipStart + i.duration - 0.25;
+          from = (absolute ? i.fileStart : 0) + (i.clipStart ?? 0);
+          to = from + i.duration;
+          video.currentTime = from;
+        });
+        video.addEventListener("timeupdate", () => { if (video.currentTime >= to || video.currentTime < from - 0.5) video.currentTime = from; });
+        video.addEventListener("ended", () => { video.currentTime = from; video.play(); });
+        thumb.append(video); });
       thumb.addEventListener("mouseleave", () => { video?.remove(); video = null; });
     }
     return h("div", { class: "media" }, thumb,
@@ -645,31 +657,215 @@ function Library(root) {
   return { dispose() { disposed = true; clearInterval(timer); } };
 }
 
+/**
+ * YouTube import: paste a link, choose the section on a timeline, check its first and last frames
+ * (square, as on the screen) and watch it loop, then import it in the best quality.
+ */
 function youtubeCard(onStarted) {
-  const url = h("input", { type: "url", placeholder: "https://www.youtube.com/watch?v=…" });
-  const result = h("div", { class: "stack" });
-  const probe = h("button", { class: "primary", onclick: async () => {
-    probe.disabled = true; result.replaceChildren(h("p", { class: "muted" }, "Reading the video…"));
+  let video = null, url = "", start = 0, length = 15, previewId = null, previewFor = "", job = null;
+  const MAX = 300;
+  const fmt = s => {
+    const t = Math.max(0, Math.round(s * 10) / 10), m = Math.floor(t / 60), sec = Math.round((t - m * 60) * 10) / 10;
+    const whole = Math.floor(sec), tenth = Math.round((sec - whole) * 10);
+    return `${m}:${String(whole).padStart(2, "0")}${tenth ? "." + tenth : ""}`;
+  };
+  const end = () => Math.min(video.durationSeconds, start + length);
+  const key = () => `${url}|${start}|${length}`;
+
+  const input = h("input", { type: "url", placeholder: "Paste a YouTube link…", onkeydown: e => e.key === "Enter" && lookup() });
+  input.addEventListener("input", debounce(() => /youtu\.?be/i.test(input.value) && input.value.trim() !== url && lookup(), 400));
+  const lookupButton = h("button", { class: "primary", onclick: () => lookup() }, "Look up");
+  const body = h("div", { class: "stack" });
+
+  async function lookup() {
+    if (!input.value.trim()) return;
+    url = input.value.trim();
+    lookupButton.disabled = true;
+    body.replaceChildren(h("p", { class: "muted" }, "Reading the video… (a few seconds)"));
     try {
-      const v = await api("/youtube/probe", { method: "POST", body: { url: url.value } });
-      const start = h("input", { type: "text", value: "0:00" });
-      const length = h("input", { type: "number", min: 1, max: Math.ceil(v.durationSeconds), value: Math.min(30, Math.ceil(v.durationSeconds)) });
-      result.replaceChildren(
-        h("div", { class: "yt-preview" }, v.thumbnailUrl ? h("img", { src: v.thumbnailUrl, alt: "" }) : h("div"),
-          h("div", {}, h("b", {}, v.title), h("div", { class: "muted small" }, `${v.channel} · ${fmtTime(v.durationSeconds)}`), h("div", { class: "muted small" }, v.best))),
-        h("div", { class: "two" }, field("Start (m:ss)", start), field("Length (seconds)", length)),
-        h("button", { class: "primary", onclick: async () => {
-          const s = parseTime(start.value);
-          if (Number.isNaN(s)) return toast("Start: use m:ss, for example 1:30.");
-          await api("/youtube/import", { method: "POST", body: { url: url.value, start: s, length: Number(length.value) } });
-          result.replaceChildren(h("p", { class: "muted" }, "Downloading in the best quality… follow it below."));
-          onStarted();
-        } }, "Import this part"));
+      video = await api("/youtube/probe", { method: "POST", body: { url } });
+      start = 0;
+      length = Math.min(15, Math.max(1, Math.floor(video.durationSeconds)));
+      previewId = null;
+      render();
     } catch (err) {
-      result.replaceChildren(h("p", { class: "error" }, err.message));
-    } finally { probe.disabled = false; }
-  } }, "Look up");
-  return h("div", { class: "card stack" }, h("h2", {}, "YouTube"), h("div", { class: "row" }, h("div", { class: "grow" }, url), probe), result);
+      video = null;
+      body.replaceChildren(h("p", { class: "error" }, err.message));
+    } finally { lookupButton.disabled = false; }
+  }
+
+  // ------------------------------------------------------------ the parts that change with the section
+
+  const range = h("div", { class: "range" }, h("span", { class: "handle l" }), h("span", { class: "handle r" }));
+  const track = h("div", { class: "track" });
+  const timeline = h("div", { class: "timeline" }, track, range);
+  const readout = h("div", { class: "readout" });
+  const startBox = h("input", { type: "text" });
+  const lengthBox = h("input", { type: "number", min: 1, max: MAX, step: 0.5 });
+  const firstFrame = frameBox("First frame");
+  const lastFrame = frameBox("Last frame");
+  const loopBox = h("div", { class: "frame loop" }, h("span", { class: "frame-label" }, "Loop preview"));
+  const loopButton = h("button", { onclick: () => previewLoop() }, "▶ Preview the loop");
+  const status = h("div", { class: "stack" });
+
+  function frameBox(label) {
+    const img = h("img", { alt: "" });
+    const note = h("span", { class: "frame-note" }, "");
+    const box = h("div", { class: "frame" }, img, h("span", { class: "frame-label" }, label), note);
+    box.show = (t) => {
+      note.textContent = "Loading…";
+      img.style.opacity = ".35";
+      const src = `/api/youtube/frame?url=${encodeURIComponent(url)}&t=${t.toFixed(2)}`;
+      const probe = new Image();
+      probe.onload = () => { if (box.wanted === src) { img.src = src; img.style.opacity = "1"; note.textContent = fmt(t); } };
+      probe.onerror = () => { if (box.wanted === src) note.textContent = "Not available"; };
+      box.wanted = src;
+      probe.src = src;
+    };
+    return box;
+  }
+
+  const loadFrames = debounce(() => {
+    firstFrame.show(start);
+    // The last frame shown before the loop starts over (one frame before the end).
+    lastFrame.show(Math.max(start, end() - 0.05));
+  }, 600);
+
+  function update(changedFrames = true) {
+    if (!video) return;
+    const d = video.durationSeconds;
+    range.style.left = (start / d * 100) + "%";
+    range.style.width = (Math.max(0.3, (end() - start) / d * 100)) + "%";
+    startBox.value = fmt(start);
+    lengthBox.value = String(Math.round((end() - start) * 10) / 10);
+    const mb = video.bytesPerSecond ? ` · ≈ ${Math.max(1, Math.round(video.bytesPerSecond * (end() - start) / 1048576))} MB` : "";
+    readout.replaceChildren(
+      h("b", {}, `${fmt(start)} → ${fmt(end())}`),
+      h("span", {}, ` · ${Math.round((end() - start) * 10) / 10} s of ${fmt(d)}${mb}`));
+    if (changedFrames) loadFrames();
+    loopButton.textContent = previewId && previewFor === key() ? "▶ Watch again" : previewId ? "▶ Preview the new section" : "▶ Preview the loop";
+  }
+
+  function set(newStart, newLength) {
+    const d = video.durationSeconds;
+    length = clamp(Math.round(newLength * 10) / 10, 1, Math.min(MAX, d));
+    start = clamp(Math.round(newStart * 10) / 10, 0, Math.max(0, d - length));
+    update();
+  }
+
+  // Timeline: drag the section to move it, its edges to change start or end; a click elsewhere moves it there.
+  timeline.addEventListener("pointerdown", e => {
+    if (!video) return;
+    e.preventDefault();
+    timeline.setPointerCapture(e.pointerId);
+    const rect = timeline.getBoundingClientRect();
+    const at = ev => clamp((ev.clientX - rect.left) / rect.width, 0, 1) * video.durationSeconds;
+    const mode = e.target.classList.contains("l") ? "start" : e.target.classList.contains("r") ? "end" : e.target === range ? "move" : "jump";
+    const from = { t: at(e), start, end: end() };
+    if (mode === "jump") set(at(e) - length / 2, length);
+    const move = ev => {
+      const t = at(ev);
+      if (mode === "start") set(Math.min(t, from.end - 1), from.end - Math.min(t, from.end - 1));
+      else if (mode === "end") set(from.start, Math.max(1, t - from.start));
+      else set((mode === "move" ? from.start : start) + (mode === "move" ? t - from.t : 0), length);
+    };
+    const up = () => { timeline.removeEventListener("pointermove", move); timeline.removeEventListener("pointerup", up); };
+    timeline.addEventListener("pointermove", move);
+    timeline.addEventListener("pointerup", up);
+  });
+  startBox.addEventListener("change", () => { const s = parseTime(startBox.value); Number.isNaN(s) ? update(false) : set(s, length); });
+  lengthBox.addEventListener("change", () => set(start, Number(lengthBox.value) || length));
+
+  async function previewLoop() {
+    if (previewId && previewFor === key()) return playPreview();
+    loopButton.disabled = true;
+    loopBox.querySelector("video")?.remove();
+    loopBox.dataset.note = "";
+    const note = h("span", { class: "frame-note" }, "Preparing a light copy…");
+    loopBox.append(note);
+    try {
+      const p = await api("/youtube/preview", { method: "POST", body: { url, start, length } });
+      previewId = p.id; previewFor = key();
+      loopBox.preview = p;
+      note.remove();
+      playPreview();
+    } catch (err) {
+      note.textContent = err.message;
+    } finally { loopButton.disabled = false; update(false); }
+  }
+
+  function playPreview() {
+    const p = loopBox.preview;
+    loopBox.querySelector("video")?.remove();
+    // The server cut exactly the section (starting at 0): the whole file is the loop.
+    const v = h("video", { src: `/api/youtube/preview/${p.id}`, muted: true, playsInline: true, autoplay: true, loop: true });
+    loopBox.prepend(v);
+  }
+
+  async function importIt(apply) {
+    try {
+      const started = await api("/youtube/import", { method: "POST", body: { url, start, length, apply } });
+      job = started.id;
+      onStarted?.();
+      follow(apply);
+    } catch (err) { toast(err.message); }
+  }
+
+  async function follow(apply) {
+    const bar = h("i", { style: { width: "0%" } });
+    const barBox = h("div", { class: "bar busy" }, bar);
+    const title = h("b", {}, "Downloading in the best quality…");
+    const detail = h("div", { class: "muted small" });
+    const cancel = h("button", { class: "icon", onclick: () => api(`/jobs/${job}`, { method: "DELETE" }) }, "Cancel");
+    status.replaceChildren(h("div", { class: "row" }, h("div", { class: "grow" }, title), cancel), barBox, detail);
+    for (;;) {
+      await new Promise(r => setTimeout(r, 700));
+      const j = (await api("/jobs").catch(() => [])).find(x => x.id === job);
+      if (!j) return status.replaceChildren();
+      if (j.state === "running") {
+        title.textContent = j.text;
+        detail.textContent = j.detail ?? "";
+        barBox.classList.toggle("busy", j.fraction == null);
+        bar.style.width = Math.round((j.fraction ?? 0) * 100) + "%";
+        continue;
+      }
+      if (j.state === "failed") return status.replaceChildren(h("p", { class: "error" }, j.error ?? "The import failed."));
+      if (j.state === "cancelled") return status.replaceChildren(h("p", { class: "muted" }, "Cancelled."));
+      return status.replaceChildren(h("p", { class: "ok" }, apply ? "Imported, and on the screen now." : "Imported into the library below."),
+        apply ? h("a", { href: "#/studio" }, "Open the Studio") : null);
+    }
+  }
+
+  function render() {
+    const d = video.durationSeconds;
+    const lengths = [5, 10, 15, 30, 60].filter(l => l <= d);
+    body.replaceChildren(
+      h("div", { class: "yt-preview" }, video.thumbnailUrl ? h("img", { src: video.thumbnailUrl, alt: "" }) : h("div"),
+        h("div", { class: "stack", style: { gap: "2px" } }, h("b", {}, video.title),
+          h("div", { class: "muted small" }, `${video.channel} · ${fmt(d)}`),
+          h("div", { class: "small", style: { color: "var(--accent)" } }, "Best available: " + video.best),
+          video.onlyHdr ? h("div", { class: "small", style: { color: "var(--warm)" } }, "Only an HDR version exists: colours may look washed out.") : null)),
+      h("div", { class: "stack", style: { gap: "6px" } },
+        h("div", { class: "row" }, h("h3", { class: "grow" }, "Choose the part to loop"), readout),
+        timeline,
+        h("div", { class: "row small muted", style: { justifyContent: "space-between" } }, h("span", {}, "0:00"), h("span", {}, fmt(d / 2)), h("span", {}, fmt(d)))),
+      h("div", { class: "two" },
+        field("Start (m:ss)", h("div", { class: "row" },
+          h("button", { class: "icon", title: "1 second earlier", onclick: () => set(start - 1, length) }, "−1 s"), h("div", { class: "grow" }, startBox),
+          h("button", { class: "icon", title: "1 second later", onclick: () => set(start + 1, length) }, "+1 s"))),
+        field("Length (seconds)", h("div", { class: "row" }, h("div", { class: "grow" }, lengthBox),
+          ...lengths.map(l => h("button", { class: "icon", onclick: () => set(start, l) }, `${l}`))))),
+      h("div", { class: "frames" }, firstFrame, lastFrame, loopBox),
+      h("p", { class: "muted small" }, "Cropped square, as on your screen. When the last frame flows into the first, the loop looks seamless."),
+      h("div", { class: "row" }, loopButton, h("span", { class: "grow" }),
+        h("button", { onclick: () => importIt(false) }, "Import to the library"),
+        h("button", { class: "primary", onclick: () => importIt(true) }, "Import and show on the screen")),
+      status);
+    update();
+  }
+
+  return h("div", { class: "card stack" }, h("h2", {}, "YouTube"),
+    h("div", { class: "row" }, h("div", { class: "grow" }, input), lookupButton), body);
 }
 
 // ---------------------------------------------------------------------------------------------- ARGB

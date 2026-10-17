@@ -42,6 +42,7 @@ builder.Services.AddSingleton(new WidgetText(sensors));
 builder.Services.AddSingleton<IScreen, ThermalrightBulkScreen>();
 builder.Services.AddSingleton<MediaLibrary>();
 builder.Services.AddSingleton<JobList>();
+builder.Services.AddSingleton<YouTubeService>();
 builder.Services.AddSingleton<Auth>();
 builder.Services.AddSingleton<DisplayService>();
 builder.Services.AddHostedService(s => s.GetRequiredService<DisplayService>());
@@ -212,22 +213,62 @@ api.MapDelete("/library/{id}", (MediaLibrary library, DataStore s, string id) =>
     return Results.Ok();
 });
 
-api.MapPost("/youtube/probe", async (YouTubeRequest body, CancellationToken token) =>
+api.MapPost("/youtube/probe", async (YouTubeService youtube, YouTubeRequest body, CancellationToken token) =>
 {
     try
     {
-        var video = await new YouTubeImporter(Path.Combine(store.CacheDir, "downloads")).ProbeAsync(body.Url ?? "", token);
-        return Results.Ok(new { video.Title, video.Channel, video.DurationSeconds, video.ThumbnailUrl, best = video.BestDescription });
+        var video = await youtube.ProbeAsync(body.Url ?? "", token);
+        var perSecond = video.DurationSeconds > 0 ? YouTubeImporter.EstimateBytes(video, video.DurationSeconds) / video.DurationSeconds : null;
+        return Results.Ok(new
+        {
+            video.Id, video.Title, video.Channel, video.DurationSeconds, video.ThumbnailUrl,
+            best = video.BestDescription, onlyHdr = video.OnlyHdrAvailable, bytesPerSecond = perSecond,
+        });
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
         return Results.BadRequest(new { error = ex.Message });
     }
 });
-api.MapPost("/youtube/import", (MediaLibrary library, JobList jobs, YouTubeRequest body) =>
+api.MapGet("/youtube/frame", async (YouTubeService youtube, string url, double t, CancellationToken token) =>
+{
+    try
+    {
+        return Results.File(await youtube.FrameAsync(url, t, token), "image/png");
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+api.MapPost("/youtube/preview", async (YouTubeService youtube, YouTubeRequest body, CancellationToken token) =>
+{
+    try
+    {
+        var (id, offset, length) = await youtube.PreviewAsync(body.Url ?? "", Math.Max(0, body.Start), Math.Clamp(body.Length, 1, 300), token);
+        return Results.Ok(new { id, offset, length });
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+api.MapGet("/youtube/preview/{id}", (YouTubeService youtube, string id) =>
+    youtube.PreviewFile(id) is { } file ? Results.File(file, MimeOf(file), enableRangeProcessing: true) : Results.NotFound());
+api.MapPost("/youtube/import", (YouTubeService youtube, JobList jobs, DataStore s, YouTubeRequest body) =>
 {
     var job = jobs.Start("YouTube import", async (job, token) =>
-        (await library.ImportYouTubeAsync(body.Url ?? "", Math.Max(0, body.Start), Math.Max(1, body.Length), job, token)).Id, log);
+    {
+        var item = await youtube.ImportAsync(body.Url ?? "", Math.Max(0, body.Start), Math.Clamp(body.Length, 1, 300), job, token);
+        if (body.Apply)
+        {
+            // "Import and show on the screen": done here, so it happens even if the page was closed.
+            var design = s.Design.Clone();
+            design.Background = new PanelBackground { MediaId = item.Id, Color = design.Background.Color };
+            s.SaveDesign(design);
+        }
+        return item.Id;
+    }, log);
     return new { job.Id, job.Title };
 });
 
@@ -280,4 +321,4 @@ internal sealed record PasswordRequest(string? Password);
 internal sealed record PasswordChange(string? Current, string? Password);
 internal sealed record SettingsRequest(int? Brightness, int? Rotation, int? FramesPerSecond, bool? Fahrenheit, bool? On);
 internal sealed record RenameRequest(string? Name);
-internal sealed record YouTubeRequest(string? Url, double Start, double Length);
+internal sealed record YouTubeRequest(string? Url, double Start, double Length, bool Apply = false);

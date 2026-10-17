@@ -103,6 +103,17 @@ public sealed partial class YouTubeImporter(string downloadDir)
         return DownloadSectionAsync(video, start, length, video.Best.Id, stem, estimate, progress, cancellationToken);
     }
 
+    /// <summary>
+    /// A light copy of the section (at most 480p) to preview the loop before downloading it in full;
+    /// like the real download it starts at a keyframe, <see cref="ImportedClip.OffsetSeconds"/> into the file.
+    /// </summary>
+    public Task<ImportedClip> DownloadPreviewAsync(YouTubeVideo video, double start, double length, CancellationToken cancellationToken)
+    {
+        var dir = Directory.CreateDirectory(Path.Combine(downloadDir, "previews")).FullName;
+        var stem = Path.Combine(dir, $"{video.Id}-{start.ToString("0.###", CultureInfo.InvariantCulture)}-{length.ToString("0.###", CultureInfo.InvariantCulture)}");
+        return DownloadSectionAsync(video, start, length, "bv*[height<=480][dynamic_range=SDR][ext=mp4]/bv*[height<=480][dynamic_range=SDR]/bv*[height<=480]/wv*", stem, null, null, cancellationToken);
+    }
+
     /// <summary>Expected size of a section: the stream's exact size pro rata, else its bitrate × length.</summary>
     public static long? EstimateBytes(YouTubeVideo video, double length)
     {

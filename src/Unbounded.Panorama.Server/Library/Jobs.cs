@@ -10,6 +10,9 @@ public sealed class Job : IProgress<ProgressInfo>
     public required string Title { get; init; }
     public string Text { get; private set; } = "Starting…";
     public double? Fraction { get; private set; }
+
+    /// <summary>Size, speed and time left while downloading.</summary>
+    public string? Detail { get; private set; }
     public string State { get; private set; } = "running";
     public string? Error { get; private set; }
     public string? ResultId { get; private set; }
@@ -22,6 +25,7 @@ public sealed class Job : IProgress<ProgressInfo>
     {
         Text = value.Text;
         Fraction = value.Fraction;
+        Detail = value.Detail;
     }
 
     internal void Done(string? resultId)

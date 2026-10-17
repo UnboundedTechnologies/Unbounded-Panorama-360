@@ -159,7 +159,7 @@ public sealed class DisplayService : BackgroundService
         }
         var placement = MediaPlacement.Compute(w, h, item.Width, item.Height, bg.X, bg.Y, bg.Width);
         var fps = Math.Clamp(settings.FramesPerSecond, 5, 30);
-        var key = $"{item.Id}|{placement}|{bg.StartSeconds}|{bg.DurationSeconds}|{fps}";
+        var key = $"{item.Id}|{item.ClipStart}|{placement}|{bg.StartSeconds}|{bg.DurationSeconds}|{fps}";
         if (key == _playing)
             return;
         _playing = key;
@@ -168,7 +168,10 @@ public sealed class DisplayService : BackgroundService
             _player.Stop();
             return;
         }
-        _player.Play(_library.PathOf(item), item.IsImage, placement, bg.StartSeconds, bg.DurationSeconds, fps);
+        // Times are relative to the item: a YouTube section starts ClipStart seconds into its file.
+        var start = Math.Clamp(bg.StartSeconds, 0, Math.Max(0, item.Duration - 0.1));
+        var length = Math.Min(bg.DurationSeconds ?? double.MaxValue, item.Duration - start);
+        _player.Play(_library.PathOf(item), item.IsImage, placement, item.ClipStart + start, item.IsImage ? null : length, fps);
     }
 
     public override void Dispose()
