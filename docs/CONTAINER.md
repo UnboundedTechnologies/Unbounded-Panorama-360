@@ -25,7 +25,7 @@ The TRYX Panorama (`391a:1011`) is driven by the Windows app.
 ## 1. Create the container
 
 A Debian 13 container, unprivileged, 2 cores, 1 GB of memory and 8 GB of disk is plenty (the app uses
-about 6 % of one core). On the Proxmox host:
+about 6 % of one core and about 190 MB of memory, and stays well under 1 GB while you pick YouTube sections). On the Proxmox host:
 
 ```sh
 pveam download local debian-13-standard_13.1-2_amd64.tar.zst

@@ -90,6 +90,7 @@ Cooler in a home server instead? The **container edition** runs on Proxmox (or a
 - **Server statistics** for your widgets: CPU, NVMe and RAM temperatures, plus host CPU, memory, load, uptime, network speed, storage and **every VM and container** through a read-only Proxmox token.
 - **ARGB for the server** too: motherboard headers, fan hubs and every USB RGB device OpenRGB supports, with sync, profiles and the automatic check and repair.
 - **Runs by itself**: starts with the server, restores the design and the lighting, and uses about 6 % of one CPU core.
+- **Light on memory**: about 190 MB for the app, so a 1 GB container is plenty, even while you scrub through a YouTube video (only the frames you are looking at are fetched; the ones you moved past are cancelled).
 - **Optional password** for the page.
 
 ## Get it
@@ -168,6 +169,8 @@ The app needs administrator rights because CPU sensors are read through a kernel
 Thermalright screens do not draw anything themselves: they show whatever picture they receive, and go back to their logo after 2 to 3 seconds without one. The server therefore composes every frame (the background's current video frame, the text and values, the drawing) with SkiaSharp and streams it at 24 frames per second through its own libusb driver: raw bulk transfers on endpoint `0x01`, a 64-byte handshake (`12 34 56 78`, command 1) whose reply names the panel, then frames made of a 64-byte header (magic, width, height, command 2, pixel count) and RGB565 pixels, high byte first. A video background is first rendered once as a small clip of exactly the visible part, then looped in real time.
 
 A YouTube section can only be downloaded from the keyframe before its start (cutting anywhere else would mean re-encoding the original), and it keeps YouTube's timestamps. The library therefore records where the chosen section starts inside the file and how long it is, and every player uses exactly that: the clip for the screen (a 10 s section is exactly 240 frames at 24 fps, starting on the chosen frame), the loop preview, which the server cuts to start at zero, and the library's hover previews.
+
+Choosing a section asks YouTube for frames and previews, and each request runs yt-dlp, Deno and FFmpeg (about 130 MB together). Only the newest request per picture is kept: the page aborts the one it replaces and the server kills that download, with at most two running at once (measured during a 12-move drag and a 22 s preview: 397 MB at the peak in a 1 GB container). The tools keep their temporary files on disk rather than in `/tmp`, which is in memory in a container, and the server uses .NET's workstation garbage collector (one compact heap instead of one per core). Frames, previews and imports use direct (https) streams, because a section cut out of an HLS stream comes out empty.
 
 Inside a container, live values come from the host's `hwmon` sensors, and whole-server figures from the Proxmox API with a token that only has the read-only PVEAuditor role. OpenRGB runs as a service in the container, listening only on `127.0.0.1`.
 
