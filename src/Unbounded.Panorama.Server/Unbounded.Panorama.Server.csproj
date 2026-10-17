@@ -17,6 +17,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>unbounded-panorama</AssemblyName>
     <RootNamespace>Unbounded.Panorama.Server</RootNamespace>
+    <Version>1.1.0</Version>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
