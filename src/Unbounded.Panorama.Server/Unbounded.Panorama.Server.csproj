@@ -17,7 +17,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>unbounded-panorama</AssemblyName>
     <RootNamespace>Unbounded.Panorama.Server</RootNamespace>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- A small container: one compact heap instead of one per core (the server default). -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
