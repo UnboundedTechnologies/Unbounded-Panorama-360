@@ -60,7 +60,9 @@ And on top of that: control of every RGB device in your PC, a different photo or
 - **Every RGB device of every major brand** in one ARGB tab: motherboard and its ARGB headers, RAM, graphics card, fans, keyboards and more, detected through the free OpenRGB service.
 - **Sync everything to one look** in one click, or give each device and zone its own effect, colour, speed and brightness.
 - **Animated effects everywhere**: Rainbow, Spectrum Cycle, Breathing and Flashing also run on devices without built-in effects (such as Wooting keyboards), drawn live by the app.
-- **Unplug and replug freely**: a keyboard or any device plugged back in gets your lighting again within seconds, and the app checks that every device really shows it.
+- **Unplug and replug freely**: a keyboard or any device plugged back in gets your lighting again within seconds.
+- **Checked, not assumed**: after start-up, sleep or a device change, the app reads every device back to make sure it really shows your settings, and repairs OpenRGB by itself when one does not. The page never shows "synced" for a device that is not.
+- **Every effect really applies**: Static, Off, Breathing and the rest reach the device even where OpenRGB 1.0 used to ignore them silently.
 - **Fan hubs and LED strips on ARGB headers**: set how many LEDs are connected, name the header, and they join in.
 - **Profiles** to switch looks, restored automatically at start-up and after sleep, and saved into devices that have memory for it.
 - **Replaces Armoury Crate's lighting** with one click (the rest of Armoury Crate stays).
@@ -112,6 +114,10 @@ dotnet run -c Release --project tools/Unbounded.Panorama.Probe -- .\probe-output
 The cooler appears to Windows as a USB printer-class device bound to the in-box `usbprint.sys` driver. The app opens its `GUID_DEVINTERFACE_USBPRINT` interface with overlapped `ReadFile`/`WriteFile`: **no driver replacement, no Zadig.** Messages are `"TRYX"` + a little-endian `uint32` length + a protobuf message (see `src/Unbounded.Panorama.Core/Protocol/panorama.proto`).
 
 Your design becomes two things: an **overlay** of text groups the cooler's firmware draws itself (so live values are cheap to update) and **one H.264 video** for the background, which FFmpeg composes from your photos, videos and drawing.
+
+RGB goes through the OpenRGB service on `127.0.0.1:6742`. The app works around two OpenRGB 1.0 bugs, both confirmed in its source and on hardware:
+- **Modes without a direction** (Static, Off, Breathing…) are reported with direction `0xFFFFFFFF` but only accepted with `0`, and a request with the reported value is dropped without an error. The app sends mode changes itself with the value OpenRGB accepts.
+- **A device detected again while OpenRGB runs** (unplugged and plugged back in, or after a rescan) gets a new internal ID that OpenRGB then checks as a list position, so every command for it is dropped while it stays listed (fixed in OpenRGB 1.1). The app listens for OpenRGB's device-list notice, reads every device back after re-applying, and restarts the service when a device ignored its settings: again after each replug, otherwise at most once every 10 minutes and 3 times an hour. Each step is written to `lighting.log`.
 
 The app needs administrator rights because CPU sensors are read through a kernel driver (like HWiNFO). It still never shows a UAC prompt once installed: setup registers two scheduled tasks with highest privileges, one the shortcuts use and one for "Start with Windows".
 
