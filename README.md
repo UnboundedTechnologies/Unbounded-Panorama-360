@@ -59,6 +59,7 @@ And on top of that: control of every RGB device in your PC, a different photo or
 ### 🌈 All your RGB in one place
 - **Every RGB device of every major brand** in one ARGB tab: motherboard and its ARGB headers, RAM, graphics card, fans, keyboards and more, detected through the free OpenRGB service.
 - **Sync everything to one look** in one click, or give each device and zone its own effect, colour, speed and brightness.
+- **Animated effects everywhere**: Rainbow, Spectrum Cycle, Breathing and Flashing also run on devices without built-in effects (such as Wooting keyboards), drawn live by the app.
 - **Fan hubs and LED strips on ARGB headers**: set how many LEDs are connected, name the header, and they join in.
 - **Profiles** to switch looks, restored automatically at start-up and after sleep, and saved into devices that have memory for it.
 - **Replaces Armoury Crate's lighting** with one click (the rest of Armoury Crate stays).

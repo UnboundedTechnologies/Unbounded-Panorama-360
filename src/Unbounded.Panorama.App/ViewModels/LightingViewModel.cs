@@ -103,6 +103,7 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
         Connected = ok;
         if (!ok)
         {
+            StopAnimation();
             Devices.Clear();
             OnPropertyChanged(nameof(HasDevices));
             StatusText = OpenRgbMissing
@@ -205,10 +206,86 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
                 }
             }
             while (_applyAgain);
+            UpdateAnimation();
         }
         finally
         {
             _applying = false;
+        }
+    }
+
+    // ================================================================== effects drawn by the app
+
+    private readonly object _animationGate = new();
+    private System.Threading.Timer? _animation;
+    private List<(RgbDevice Device, LightSetting Look)> _animated = [];
+    private int _drawing;
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+
+    /// <summary>
+    /// Devices showing an animated effect they lack (the keyboard's Rainbow, for example) get it drawn
+    /// by the app, frame by frame; the timer runs only while at least one device needs it.
+    /// </summary>
+    private void UpdateAnimation()
+    {
+        var sync = _profile.Sync ? _profile.SyncSetting : null;
+        var list = new List<(RgbDevice, LightSetting)>();
+        foreach (var device in _hub.Devices)
+        {
+            var settings = _profile.Devices.FirstOrDefault(d => d.Key == device.Key);
+            if (settings is not { Enabled: true })
+                continue;
+            var synced = sync is not null && settings.InSync;
+            if (!synced && !settings.Touched)
+                continue;
+            var look = synced ? sync! : settings.Setting;
+            if (SoftwareEffects.Needed(device, look.Effect))
+                list.Add((device, look.Clone()));
+        }
+        lock (_animationGate)
+        {
+            _animated = list;
+            if (list.Count > 0 && Connected)
+                _animation ??= new System.Threading.Timer(_ => DrawFrame(), null, 0, 1000 / SoftwareEffects.FramesPerSecond);
+            else
+                StopAnimation();
+        }
+    }
+
+    private void StopAnimation()
+    {
+        lock (_animationGate)
+        {
+            _animation?.Dispose();
+            _animation = null;
+        }
+    }
+
+    private void DrawFrame()
+    {
+        // A frame still being sent: skip this one rather than queueing them up.
+        if (Interlocked.Exchange(ref _drawing, 1) == 1)
+            return;
+        try
+        {
+            List<(RgbDevice Device, LightSetting Look)> devices;
+            lock (_animationGate)
+                devices = _animated;
+            var seconds = _clock.Elapsed.TotalSeconds;
+            foreach (var (device, look) in devices)
+            {
+                var frame = SoftwareEffects.Frame(look.Effect, RgbColor.Parse(look.Color), look.Speed, look.Brightness, device.LedCount, seconds);
+                _hub.Execute([new SetLedsCommand(device.Index, frame)]);
+            }
+        }
+        catch (Exception)
+        {
+            // Disconnected: the reconnect timer restores everything, animation included.
+            StopAnimation();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _drawing, 0);
         }
     }
 
@@ -538,6 +615,7 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        StopAnimation();
         _reconnect.Stop();
         _applyDebounce.Stop();
         _hub.Dispose();
