@@ -12,7 +12,7 @@
     <RootNamespace>Unbounded.Panorama.App</RootNamespace>
     <Product>Unbounded Panorama 360</Product>
     <Company>Unbounded Technologies</Company>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- Program.Main relaunches elevated through the launcher task before WPF starts. -->
     <StartupObject>Unbounded.Panorama.App.Program</StartupObject>
