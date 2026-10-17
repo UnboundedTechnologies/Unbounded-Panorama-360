@@ -261,7 +261,11 @@ public sealed partial class MainViewModel : ObservableObject
                 _ui.BeginInvoke(() => AddLog("Could not update Start with Windows: " + ex.Message));
             }
         });
-        Lighting = new LightingViewModel(storage.RoamingDir, _ui, line => _ui.BeginInvoke(() => AddLog(line)));
+        Lighting = new LightingViewModel(storage.RoamingDir, _ui, line =>
+        {
+            _ui.BeginInvoke(() => AddLog(line));
+            AppendLightingLog(line);
+        });
         Lighting.Start();
         ReloadPresets();
         Load(storage.LoadLayout(), keepSelection: false);
@@ -1523,6 +1527,26 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Adds a line to the Activity log (used by app-level services).</summary>
     public void Report(string line) => AddLog(line);
+
+    private readonly object _lightingLogGate = new();
+
+    /// <summary>Lighting events also go to lighting.log (OpenRGB restarts, devices that ignored changes).</summary>
+    private void AppendLightingLog(string line)
+    {
+        try
+        {
+            lock (_lightingLogGate)
+            {
+                var file = Path.Combine(_storage.LocalDir, "lighting.log");
+                var lines = File.Exists(file) ? File.ReadAllLines(file).ToList() : [];
+                lines.Add($"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {line}");
+                File.WriteAllLines(file, lines.TakeLast(200));
+            }
+        }
+        catch (IOException)
+        {
+        }
+    }
 
     private void AddLog(string line)
     {

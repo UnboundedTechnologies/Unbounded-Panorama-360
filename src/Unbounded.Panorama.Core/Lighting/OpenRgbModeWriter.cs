@@ -126,6 +126,12 @@ public sealed class OpenRgbModeWriter : IDisposable
         return _stream;
     }
 
+    /// <summary>
+    /// Forgets the connection (the service restarted): a write to a peer that has gone can still
+    /// succeed once and be lost, so the next request opens a new connection instead.
+    /// </summary>
+    public void Reset() => Close();
+
     private void Close()
     {
         _stream?.Dispose();

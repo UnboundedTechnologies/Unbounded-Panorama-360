@@ -95,6 +95,46 @@ public sealed class RgbHub : IDisposable
     }
 
     /// <summary>
+    /// Reads the devices back until each reports what was sent (OpenRGB applies commands on its own
+    /// threads, a little later). Returns the names of the devices that never did within <paramref name="wait"/>.
+    /// </summary>
+    public IReadOnlyList<string> Ignored(IReadOnlyList<DeviceExpectation> expected, TimeSpan wait)
+    {
+        var pending = expected.ToList();
+        var names = new Dictionary<int, string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            lock (_gate)
+            {
+                if (_client is not { Connected: true } client)
+                    throw new InvalidOperationException("OpenRGB is not connected.");
+                pending.RemoveAll(e =>
+                {
+                    var device = client.GetControllerData(e.Device);
+                    names[e.Device] = device.Name;
+                    return LightingCheck.Matches(e, device.ActiveModeIndex, [.. device.Colors.Select(c => new RgbColor(c.R, c.G, c.B))]);
+                });
+            }
+            if (pending.Count == 0 || clock.Elapsed >= wait)
+                return [.. pending.Select(e => names[e.Device])];
+            Thread.Sleep(200);
+        }
+    }
+
+    /// <summary>Drops both connections (the service is being restarted); the next Refresh connects again.</summary>
+    public void Reset()
+    {
+        lock (_gate)
+        {
+            _client?.Dispose();
+            _client = null;
+            _devices = [];
+            _modes.Reset();
+        }
+    }
+
+    /// <summary>
     /// Stores each device's current effect in its own memory, so it shows even before the app starts
     /// (per-LED colours and devices without storage keep their previous saved effect). Writes
     /// device flash: only on request, never per edit.

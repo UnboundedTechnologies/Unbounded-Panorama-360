@@ -29,11 +29,20 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
     private readonly string _profileDir;
     private readonly DispatcherTimer _applyDebounce;
     private readonly DispatcherTimer _reconnect;
+    private readonly DispatcherTimer _listSettled;
+    private OpenRgbWatcher? _watcher;
     private LightingProfile _profile = new();
     private bool _configured;
     private bool _loading;
     private bool _applying;
     private bool _applyAgain;
+    // Read the devices back after the next apply (after connecting, waking up or a device change).
+    private bool _checkNext;
+    private bool _recovering;
+    private DateTime _lastRestart = DateTime.MinValue;
+    private readonly List<DateTime> _restarts = [];
+    // A device was plugged in or out since OpenRGB was last restarted: new evidence, a restart may help again.
+    private bool _listChangedSinceRestart;
 
     public ObservableCollection<RgbDeviceViewModel> Devices { get; } = [];
     public ObservableCollection<string> ProfileNames { get; } = [];
@@ -65,7 +74,16 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
         _stateFile = Path.Combine(roamingDir, "lighting.json");
         _profileDir = Directory.CreateDirectory(Path.Combine(roamingDir, "lighting-profiles")).FullName;
         _applyDebounce = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => { _applyDebounce!.Stop(); _ = ApplyAsync(); }, ui) { IsEnabled = false };
-        _reconnect = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Background, (_, _) => { if (!Connected) _ = RefreshAsync(apply: true); }, ui);
+        _reconnect = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Background, (_, _) => { if (!Connected && !_recovering) _ = RefreshAsync(apply: true); }, ui);
+        // A device plugged in or out: OpenRGB sends several notices while it detects, act once they stop.
+        _listSettled = new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (_, _) =>
+        {
+            _listSettled!.Stop();
+            if (_recovering)
+                return;
+            _log("Lighting: OpenRGB's device list changed (a device was plugged in or out); checking every device");
+            _ = RefreshAsync(apply: true);
+        }, ui) { IsEnabled = false };
         if (File.Exists(_stateFile))
         {
             try
@@ -88,6 +106,15 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
     {
         CheckServices();
         _reconnect.Start();
+        _watcher ??= new OpenRgbWatcher();
+        _watcher.DeviceListChanged += () => _ui.BeginInvoke(() =>
+        {
+            if (_recovering)
+                return;
+            _listChangedSinceRestart = true;
+            _listSettled.Stop();
+            _listSettled.Start();
+        });
         _ = RefreshAsync(apply: true);
     }
 
@@ -114,7 +141,10 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
         Rebuild();
         StatusText = $"{Devices.Count} RGB device{(Devices.Count == 1 ? "" : "s")} found, {Devices.Sum(d => d.Info.LedCount)} LEDs";
         if (apply && _configured)
+        {
+            _checkNext = true;
             await ApplyAsync();
+        }
     }
 
     private void Rebuild()
@@ -158,7 +188,8 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
 
     private async Task ApplyAsync()
     {
-        if (!Connected)
+        // While OpenRGB restarts, edits wait: the refresh after it sends the newest settings.
+        if (!Connected || _recovering)
             return;
         if (_applying)
         {
@@ -166,15 +197,21 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
             return;
         }
         _applying = true;
+        IReadOnlyList<string> ignored = [];
         try
         {
             do
             {
                 _applyAgain = false;
+                var check = _checkNext;
+                _checkNext = false;
+                if (check)
+                    await StopAnimationAndWaitAsync(); // frames would overwrite the colours being checked
                 var profile = _profile.Clone();
                 var sync = profile.Sync ? profile.SyncSetting : null;
                 var devices = _hub.Devices;
                 var resized = false;
+                var sent = new List<RgbCommand>();
                 var failure = await Task.Run(() =>
                 {
                     foreach (var device in devices)
@@ -184,6 +221,7 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
                         try
                         {
                             _hub.Execute(commands);
+                            sent.AddRange(commands);
                         }
                         catch (Exception ex)
                         {
@@ -198,6 +236,20 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
                     _log("Lighting: " + failure);
                     Connected = _hub.Connected;
                 }
+                else if (check)
+                {
+                    try
+                    {
+                        var expected = LightingCheck.Expected(sent);
+                        ignored = await Task.Run(() => _hub.Ignored(expected, TimeSpan.FromSeconds(2)));
+                        if (ignored.Count == 0)
+                            _log($"Lighting: checked {expected.Count} device{(expected.Count == 1 ? "" : "s")}, all show the settings");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log("Lighting: could not read the devices back: " + ex.Message);
+                    }
+                }
                 if (resized)
                 {
                     // LED counts changed: show the new numbers.
@@ -211,6 +263,93 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
         finally
         {
             _applying = false;
+        }
+        if (ignored.Count > 0)
+            await RecoverAsync(ignored);
+    }
+
+    /// <summary>
+    /// Devices ignore what is sent: OpenRGB 1.0 does this for any device it detected again while
+    /// running (see <see cref="LightingCheck"/>). Restarting its service makes it detect everything
+    /// afresh. Again right away after a device was plugged in or out (each replug breaks it anew),
+    /// otherwise at most once every 10 minutes, and never more than 3 times an hour, so a device
+    /// that refuses for another reason cannot cause a restart loop.
+    /// </summary>
+    private async Task RecoverAsync(IReadOnlyList<string> ignored)
+    {
+        var names = string.Join(", ", ignored.Distinct());
+        if (_recovering)
+            return;
+        var now = DateTime.UtcNow;
+        _restarts.RemoveAll(t => now - t > TimeSpan.FromHours(1));
+        var allowed = (_listChangedSinceRestart || now - _lastRestart >= TimeSpan.FromMinutes(10)) && _restarts.Count < 3;
+        if (!allowed)
+        {
+            StatusText = $"OpenRGB is not applying changes to {names}. Restarting the PC fixes it.";
+            _log($"Lighting: {names} ignored the changes; OpenRGB was already restarted {(_restarts.Count >= 3 ? "3 times this hour" : "recently")}, not again");
+            return;
+        }
+        _recovering = true;
+        _lastRestart = now;
+        _restarts.Add(now);
+        _listChangedSinceRestart = false;
+        Busy = true;
+        StatusText = $"{names} stopped taking changes (OpenRGB loses devices that are plugged back in). Restarting OpenRGB…";
+        _log($"Lighting: {names} ignored the changes; restarting the OpenRGB service");
+        try
+        {
+            StopAnimation();
+            var restarted = await Task.Run(RestartOpenRgb);
+            if (restarted is not null)
+            {
+                StatusText = $"OpenRGB is not applying changes to {names}, and it could not be restarted ({restarted}). Restarting the PC fixes it.";
+                _log("Lighting: OpenRGB restart failed: " + restarted);
+                return;
+            }
+            _log("Lighting: OpenRGB restarted, devices detected again");
+        }
+        finally
+        {
+            _recovering = false;
+            Busy = false;
+        }
+        await RefreshAsync(apply: true);
+    }
+
+    /// <summary>Restarts the OpenRGB service and waits until it has detected the devices; null when it worked.</summary>
+    private string? RestartOpenRgb()
+    {
+        try
+        {
+            _hub.Reset();
+            using (var service = new ServiceController(OpenRgbService))
+            {
+                if (service.Status != ServiceControllerStatus.Stopped)
+                {
+                    service.Stop();
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+                }
+                service.Start();
+                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            }
+            // Detection takes a few seconds: wait until the same devices are listed twice in a row.
+            string? previous = null;
+            var clock = Stopwatch.StartNew();
+            while (clock.Elapsed < TimeSpan.FromSeconds(45))
+            {
+                Thread.Sleep(1500);
+                if (!_hub.Refresh())
+                    continue;
+                var now = string.Join("\n", _hub.Devices.Select(d => d.Key));
+                if (now.Length > 0 && now == previous)
+                    return null;
+                previous = now;
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
         }
     }
 
@@ -259,6 +398,14 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
             _animation?.Dispose();
             _animation = null;
         }
+    }
+
+    /// <summary>Stops the animation and lets a frame that is being sent finish.</summary>
+    private async Task StopAnimationAndWaitAsync()
+    {
+        StopAnimation();
+        for (var i = 0; i < 50 && Volatile.Read(ref _drawing) == 1; i++)
+            await Task.Delay(10);
     }
 
     private void DrawFrame()
@@ -618,6 +765,8 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
         StopAnimation();
         _reconnect.Stop();
         _applyDebounce.Stop();
+        _listSettled.Stop();
+        _watcher?.Dispose();
         _hub.Dispose();
     }
 }
