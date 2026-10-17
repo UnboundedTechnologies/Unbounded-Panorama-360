@@ -34,11 +34,43 @@ public sealed class YouTubeService
         return task.WaitAsync(token);
     }
 
-    /// <summary>The exact frame at <paramref name="seconds"/> (PNG).</summary>
-    public async Task<string> FrameAsync(string url, double seconds, CancellationToken token)
+    // Each frame or preview runs yt-dlp, Deno and FFmpeg (about 130 MB together). Dragging the section
+    // asks for a new frame every moment: only the newest request per slot is kept (older ones are
+    // cancelled, their processes killed) and at most two run at once, so a 1 GB container never fills up.
+    private readonly SemaphoreSlim _downloads = new(2, 2);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _latest = new();
+
+    /// <summary>Runs <paramref name="work"/> as the newest request for <paramref name="slot"/>, cancelling the previous one.</summary>
+    private async Task<T> LatestAsync<T>(string slot, CancellationToken requestAborted, Func<CancellationToken, Task<T>> work)
+    {
+        using var mine = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        if (_latest.TryGetValue(slot, out var previous))
+            previous.Cancel();
+        _latest[slot] = mine;
+        try
+        {
+            await _downloads.WaitAsync(mine.Token);
+            try
+            {
+                return await work(mine.Token);
+            }
+            finally
+            {
+                _downloads.Release();
+            }
+        }
+        finally
+        {
+            _latest.TryRemove(new KeyValuePair<string, CancellationTokenSource>(slot, mine));
+        }
+    }
+
+    /// <summary>The exact frame at <paramref name="seconds"/> (PNG); <paramref name="slot"/> names the picture it is for ("first", "last").</summary>
+    public async Task<string> FrameAsync(string url, double seconds, string slot, CancellationToken token)
     {
         var video = await ProbeAsync(url, token);
-        return await _importer.FrameAsync(video, Math.Clamp(seconds, 0, Math.Max(0, video.DurationSeconds - 0.05)), token);
+        var at = Math.Clamp(seconds, 0, Math.Max(0, video.DurationSeconds - 0.05));
+        return await LatestAsync("frame:" + slot, token, t => _importer.FrameAsync(video, at, t));
     }
 
     /// <summary>
@@ -46,7 +78,10 @@ public sealed class YouTubeService
     /// starts at a keyframe before the section; browsers would show those absolute times), so the page
     /// simply loops the whole file.
     /// </summary>
-    public async Task<(string Id, double Offset, double Length)> PreviewAsync(string url, double start, double length, CancellationToken token)
+    public Task<(string Id, double Offset, double Length)> PreviewAsync(string url, double start, double length, CancellationToken token) =>
+        LatestAsync("preview", token, t => MakePreviewAsync(url, start, length, t));
+
+    private async Task<(string Id, double Offset, double Length)> MakePreviewAsync(string url, double start, double length, CancellationToken token)
     {
         var video = await ProbeAsync(url, token);
         var clip = await _importer.DownloadPreviewAsync(video, start, length, token);

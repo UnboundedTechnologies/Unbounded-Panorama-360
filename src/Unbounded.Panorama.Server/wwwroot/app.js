@@ -702,25 +702,42 @@ function youtubeCard(onStarted) {
   const readout = h("div", { class: "readout" });
   const startBox = h("input", { type: "text" });
   const lengthBox = h("input", { type: "number", min: 1, max: MAX, step: 0.5 });
-  const firstFrame = frameBox("First frame");
-  const lastFrame = frameBox("Last frame");
+  const firstFrame = frameBox("First frame", "first");
+  const lastFrame = frameBox("Last frame", "last");
   const loopBox = h("div", { class: "frame loop" }, h("span", { class: "frame-label" }, "Loop preview"));
   const loopButton = h("button", { onclick: () => previewLoop() }, "▶ Preview the loop");
   const status = h("div", { class: "stack" });
 
-  function frameBox(label) {
+  function frameBox(label, slot) {
     const img = h("img", { alt: "" });
     const note = h("span", { class: "frame-note" }, "");
     const box = h("div", { class: "frame" }, img, h("span", { class: "frame-label" }, label), note);
-    box.show = (t) => {
+    let request = null, shown = null;
+    box.show = async (t) => {
+      // A newer position replaces the request on its way: the server stops that download.
+      request?.abort();
+      const mine = request = new AbortController();
       note.textContent = "Loading…";
+      note.title = "";
       img.style.opacity = ".35";
-      const src = `/api/youtube/frame?url=${encodeURIComponent(url)}&t=${t.toFixed(2)}`;
-      const probe = new Image();
-      probe.onload = () => { if (box.wanted === src) { img.src = src; img.style.opacity = "1"; note.textContent = fmt(t); } };
-      probe.onerror = () => { if (box.wanted === src) note.textContent = "Not available"; };
-      box.wanted = src;
-      probe.src = src;
+      try {
+        const r = await fetch(`/api/youtube/frame?url=${encodeURIComponent(url)}&t=${t.toFixed(2)}&slot=${slot}`, { signal: mine.signal });
+        if (r.status === 409) return; // replaced by a newer request
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? r.statusText);
+        const blob = URL.createObjectURL(await r.blob());
+        if (mine !== request) return URL.revokeObjectURL(blob);
+        if (shown) URL.revokeObjectURL(shown);
+        shown = img.src = blob;
+        img.style.opacity = "1";
+        note.textContent = fmt(t);
+      } catch (err) {
+        if (mine !== request || err.name === "AbortError") return;
+        // Never leave the frame of another position under an error.
+        img.removeAttribute("src");
+        img.style.opacity = "1";
+        note.textContent = "Could not load this frame";
+        note.title = err.message;
+      }
     };
     return box;
   }
@@ -776,22 +793,36 @@ function youtubeCard(onStarted) {
   startBox.addEventListener("change", () => { const s = parseTime(startBox.value); Number.isNaN(s) ? update(false) : set(s, length); });
   lengthBox.addEventListener("change", () => set(start, Number(lengthBox.value) || length));
 
+  let previewRequest = null;
   async function previewLoop() {
     if (previewId && previewFor === key()) return playPreview();
-    loopButton.disabled = true;
+    previewRequest?.abort();
+    const mine = previewRequest = new AbortController();
     loopBox.querySelector("video")?.remove();
-    loopBox.dataset.note = "";
+    loopBox.querySelectorAll(".frame-note").forEach(n => n.remove());
     const note = h("span", { class: "frame-note" }, "Preparing a light copy…");
-    loopBox.append(note);
+    const cancel = h("button", { class: "icon", style: { position: "absolute", top: "6px", right: "6px", zIndex: 2, padding: "2px 8px" }, onclick: () => mine.abort() }, "Cancel");
+    loopBox.append(note, cancel);
+    const began = Date.now();
+    const clock = setInterval(() => (note.textContent = `Preparing a light copy… ${Math.round((Date.now() - began) / 1000)} s`), 1000);
+    loopButton.disabled = true;
     try {
-      const p = await api("/youtube/preview", { method: "POST", body: { url, start, length } });
+      const r = await fetch("/api/youtube/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, start, length }), signal: mine.signal });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(p.error ?? r.statusText);
       previewId = p.id; previewFor = key();
       loopBox.preview = p;
       note.remove();
       playPreview();
     } catch (err) {
-      note.textContent = err.message;
-    } finally { loopButton.disabled = false; update(false); }
+      note.textContent = err.name === "AbortError" ? "Cancelled" : "Could not prepare the preview";
+      note.title = err.message;
+    } finally {
+      clearInterval(clock);
+      cancel.remove();
+      loopButton.disabled = false;
+      update(false);
+    }
   }
 
   function playPreview() {

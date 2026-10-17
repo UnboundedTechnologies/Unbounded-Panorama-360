@@ -19,6 +19,9 @@
     <RootNamespace>Unbounded.Panorama.Server</RootNamespace>
     <Version>1.1.1</Version>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- A small container: one compact heap instead of one per core (the server default). -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <!-- The cooler fonts (Roboto) and the app's display font (Rajdhani), shared with the Windows app. -->

@@ -29,6 +29,11 @@ public sealed partial class YouTubeImporter(string downloadDir)
     /// <summary>Highest resolution, SDR first; HDR only when nothing else exists.</summary>
     public const string FormatSelector = "bv*[dynamic_range=SDR]/bv*";
 
+    // Frames and previews prefer direct (https) streams: cutting a section out of an HLS stream (m3u8)
+    // gives an empty file (verified: 0 frames, 257 bytes, on a video whose 480p came as HLS).
+    private const string FrameFormat = "bv*[height<=720][dynamic_range=SDR][protocol=https]/bv*[height<=720][protocol=https]/bv*[protocol=https]/bv*[height<=720]/bv*";
+    private const string PreviewFormat = "bv*[height<=480][dynamic_range=SDR][protocol=https]/bv*[height<=480][protocol=https]/bv*[protocol=https]/bv*[height<=480]/wv*";
+
     public async Task<YouTubeVideo> ProbeAsync(string url, CancellationToken cancellationToken)
     {
         var json = await RunYtDlpAsync(["--no-playlist", "-J", url], null, cancellationToken).ConfigureAwait(false);
@@ -52,10 +57,11 @@ public sealed partial class YouTubeImporter(string downloadDir)
         if (formats.Count == 0)
             throw new InvalidOperationException("This video has no downloadable video streams.");
 
-        // Best resolution and frame rate first; at equal quality prefer a direct (https) stream with a known size.
+        // Direct (https) streams first: a section cut out of an HLS stream (m3u8) comes out empty, so HLS
+        // is only used when a video has nothing else. Then best resolution and frame rate, known size.
         static IEnumerable<VideoFormatInfo> Ranked(IEnumerable<VideoFormatInfo> list) =>
-            list.OrderByDescending(f => f.Height).ThenByDescending(f => f.Width).ThenByDescending(f => f.Fps)
-                .ThenByDescending(f => f.Protocol == "https").ThenByDescending(f => f.Bytes is not null);
+            list.OrderByDescending(f => f.Protocol == "https").ThenByDescending(f => f.Height).ThenByDescending(f => f.Width)
+                .ThenByDescending(f => f.Fps).ThenByDescending(f => f.Bytes is not null);
         var sdr = Ranked(formats.Where(f => !f.Hdr)).FirstOrDefault();
         var best = sdr ?? Ranked(formats).First();
 
@@ -79,7 +85,7 @@ public sealed partial class YouTubeImporter(string downloadDir)
         if (File.Exists(png))
             return png;
 
-        var clip = await DownloadSectionAsync(video, seconds, 0.5, "bv*[height<=720][dynamic_range=SDR]/bv*[height<=720]/bv*", Path.Combine(dir, stem), null, null, cancellationToken).ConfigureAwait(false);
+        var clip = await DownloadSectionAsync(video, seconds, 0.5, FrameFormat, Path.Combine(dir, stem), null, null, cancellationToken).ConfigureAwait(false);
         try
         {
             await MediaPreparer.RunFfmpegAsync([
@@ -111,7 +117,7 @@ public sealed partial class YouTubeImporter(string downloadDir)
     {
         var dir = Directory.CreateDirectory(Path.Combine(downloadDir, "previews")).FullName;
         var stem = Path.Combine(dir, $"{video.Id}-{start.ToString("0.###", CultureInfo.InvariantCulture)}-{length.ToString("0.###", CultureInfo.InvariantCulture)}");
-        return DownloadSectionAsync(video, start, length, "bv*[height<=480][dynamic_range=SDR][ext=mp4]/bv*[height<=480][dynamic_range=SDR]/bv*[height<=480]/wv*", stem, null, null, cancellationToken);
+        return DownloadSectionAsync(video, start, length, PreviewFormat, stem, null, null, cancellationToken);
     }
 
     /// <summary>Expected size of a section: the stream's exact size pro rata, else its bitrate × length.</summary>

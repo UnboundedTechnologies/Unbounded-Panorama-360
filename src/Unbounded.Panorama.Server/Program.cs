@@ -33,6 +33,13 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 
 var store = new DataStore(dataDir);
+// Temporary files of the tools this app runs go to disk, not to /tmp (in a container /tmp is often in memory:
+// yt-dlp alone unpacks 42 MB there for every run). Left-overs of a crash are cleared at start.
+var tempDir = Path.Combine(store.Root, "tmp");
+if (Directory.Exists(tempDir))
+    Directory.Delete(tempDir, recursive: true);
+Directory.CreateDirectory(tempDir);
+Environment.SetEnvironmentVariable("TMPDIR", tempDir);
 var proxmox = ProxmoxStats.FromEnvFile(Path.Combine(configDir, "proxmox.env"));
 var sensors = new LinuxSensors(proxmox);
 builder.Services.AddSingleton(store);
@@ -230,11 +237,16 @@ api.MapPost("/youtube/probe", async (YouTubeService youtube, YouTubeRequest body
         return Results.BadRequest(new { error = ex.Message });
     }
 });
-api.MapGet("/youtube/frame", async (YouTubeService youtube, string url, double t, CancellationToken token) =>
+api.MapGet("/youtube/frame", async (YouTubeService youtube, string url, double t, string? slot, CancellationToken token) =>
 {
     try
     {
-        return Results.File(await youtube.FrameAsync(url, t, token), "image/png");
+        return Results.File(await youtube.FrameAsync(url, t, slot ?? "frame", token), "image/png");
+    }
+    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+    {
+        // A newer request for the same picture replaced this one.
+        return Results.StatusCode(StatusCodes.Status409Conflict);
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
@@ -247,6 +259,10 @@ api.MapPost("/youtube/preview", async (YouTubeService youtube, YouTubeRequest bo
     {
         var (id, offset, length) = await youtube.PreviewAsync(body.Url ?? "", Math.Max(0, body.Start), Math.Clamp(body.Length, 1, 300), token);
         return Results.Ok(new { id, offset, length });
+    }
+    catch (OperationCanceledException) when (!token.IsCancellationRequested)
+    {
+        return Results.Json(new { error = "Replaced by a newer preview." }, statusCode: StatusCodes.Status409Conflict);
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {

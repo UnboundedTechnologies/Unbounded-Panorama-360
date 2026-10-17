@@ -34,7 +34,7 @@ chmod 755 /usr/local/bin/yt-dlp.new && mv /usr/local/bin/yt-dlp.new /usr/local/b
 yt-dlp --version
 
 say "Deno (yt-dlp needs a JavaScript runtime for YouTube)"
-tmp=$(mktemp -d)
+tmp=$(mktemp -d -p /var/tmp)
 curl -fsSL -o "$tmp/deno.zip" https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip
 unzip -qo "$tmp/deno.zip" -d "$tmp" && install -m 755 "$tmp/deno" /usr/local/bin/deno
 rm -rf "$tmp"
@@ -70,7 +70,9 @@ EOF
 say "Unbounded Panorama 360"
 package=${1:-}
 if [ -z "$package" ]; then
-    package=$(mktemp --suffix=.tar.gz)
+    # On disk (/var/tmp), not /tmp: in a container /tmp is often in memory. Deleted once installed.
+    package=$(mktemp -p /var/tmp --suffix=.tar.gz)
+    downloaded=$package
     url=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep -o '"browser_download_url": *"[^"]*linux-x64[^"]*\.tar\.gz"' | head -1 | cut -d'"' -f4)
     [ -n "$url" ] || { echo "No Linux package in the latest release."; exit 1; }
     curl -fsSL -o "$package" "$url"
@@ -79,6 +81,7 @@ systemctl stop unbounded-panorama 2>/dev/null || true
 rm -rf "$APP_DIR.new" && mkdir -p "$APP_DIR.new"
 tar --no-same-owner -xzf "$package" -C "$APP_DIR.new"
 rm -rf "$APP_DIR" && mv "$APP_DIR.new" "$APP_DIR"
+[ -n "${downloaded:-}" ] && rm -f "$downloaded"
 chmod 755 "$APP_DIR/unbounded-panorama"
 mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 chmod 700 "$CONFIG_DIR"
