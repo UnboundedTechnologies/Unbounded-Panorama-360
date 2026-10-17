@@ -83,7 +83,10 @@ Cooler in a home server instead? The **container edition** runs on Proxmox (or a
 - **The studio in any browser**, on a computer, tablet or phone: a **live preview** of exactly what the screen shows, updated as you drag.
 - **Text and live values anywhere**, badges, any colour (black included), alignment, four font weights, and **free drawing** right on the screen.
 - **Pictures and videos as background**: drop a file on the screen, move it and zoom with the mouse, pick the part of a video to loop.
-- **YouTube import** in the best available quality, and a **library** of everything you uploaded.
+- **YouTube import with a real section picker**: paste a link and the video appears on a timeline. Drag the highlighted section to move it, drag its edges to change the start or the end, or use one-click lengths (5, 10, 15, 30, 60 s) and ±1 s nudges, with a clear readout such as `1:00 → 1:10 · 10 s of 10:35 · ≈ 20 MB`.
+- **See the loop before you download it**: the first and last frames of your section, cropped square as on the screen, and **▶ Preview the loop**, which plays exactly that section over and over. Then import it in the best available quality, to the library or **straight onto the screen**, with progress, size, speed and time left.
+- **Exact loops**: the screen plays precisely the section you chose, frame for frame, never a second early or late.
+- **A library** of everything you added, with videos that play their own loop when you point at them.
 - **Server statistics** for your widgets: CPU, NVMe and RAM temperatures, plus host CPU, memory, load, uptime, network speed, storage and **every VM and container** through a read-only Proxmox token.
 - **ARGB for the server** too: motherboard headers, fan hubs and every USB RGB device OpenRGB supports, with sync, profiles and the automatic check and repair.
 - **Runs by itself**: starts with the server, restores the design and the lighting, and uses about 6 % of one CPU core.
@@ -163,6 +166,8 @@ The app needs administrator rights because CPU sensors are read through a kernel
 ### The container edition
 
 Thermalright screens do not draw anything themselves: they show whatever picture they receive, and go back to their logo after 2 to 3 seconds without one. The server therefore composes every frame (the background's current video frame, the text and values, the drawing) with SkiaSharp and streams it at 24 frames per second through its own libusb driver: raw bulk transfers on endpoint `0x01`, a 64-byte handshake (`12 34 56 78`, command 1) whose reply names the panel, then frames made of a 64-byte header (magic, width, height, command 2, pixel count) and RGB565 pixels, high byte first. A video background is first rendered once as a small clip of exactly the visible part, then looped in real time.
+
+A YouTube section can only be downloaded from the keyframe before its start (cutting anywhere else would mean re-encoding the original), and it keeps YouTube's timestamps. The library therefore records where the chosen section starts inside the file and how long it is, and every player uses exactly that: the clip for the screen (a 10 s section is exactly 240 frames at 24 fps, starting on the chosen frame), the loop preview, which the server cuts to start at zero, and the library's hover previews.
 
 Inside a container, live values come from the host's `hwmon` sensors, and whole-server figures from the Proxmox API with a token that only has the read-only PVEAuditor role. OpenRGB runs as a service in the container, listening only on `127.0.0.1`.
 
