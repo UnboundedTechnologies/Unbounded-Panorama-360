@@ -5,6 +5,7 @@
 # Without an argument it downloads the latest release from GitHub.
 set -eu
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 REPO="UnboundedTechnologies/Unbounded-Panorama-360"
 APP_DIR=/opt/unbounded-panorama
