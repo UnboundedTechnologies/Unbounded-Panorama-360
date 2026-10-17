@@ -1,0 +1,52 @@
+#!/bin/sh
+# Proxmox host helper for Unbounded Panorama 360 (container edition).
+# USB device numbers and hidraw nodes can change between host boots, so the container's passthrough
+# (dev0, dev1, …) is pointed at the current nodes before the guests start. Settings come from
+# /etc/default/upn360-devices:
+#   CT=116                      # the container
+#   USB="87ad:70db"             # raw USB devices (screens), vendor:product, space-separated
+#   HID="1462:7d98"             # HID devices for OpenRGB (motherboard RGB…), vendor:product
+set -eu
+CT=116
+USB="87ad:70db"
+HID=""
+[ -f /etc/default/upn360-devices ] && . /etc/default/upn360-devices
+CONF=/etc/pve/lxc/$CT.conf
+[ -f "$CONF" ] || { echo "upn360-devices: $CONF missing, nothing to do"; exit 0; }
+
+usb_node() {
+    for d in /sys/bus/usb/devices/*; do
+        [ -f "$d/idVendor" ] || continue
+        if [ "$(cat "$d/idVendor"):$(cat "$d/idProduct")" = "$1" ]; then
+            printf '/dev/bus/usb/%03d/%03d\n' "$(cat "$d/busnum")" "$(cat "$d/devnum")"
+            return 0
+        fi
+    done
+    return 1
+}
+
+hidraw_nodes() {
+    vendor=$(echo "${1%%:*}" | tr a-z A-Z)
+    product=$(echo "${1##*:}" | tr a-z A-Z)
+    for h in /sys/class/hidraw/hidraw*; do
+        [ -e "$h" ] || continue
+        grep -qi "^HID_ID=0003:0000$vendor:0000$product$" "$h/device/uevent" && echo "/dev/$(basename "$h")"
+    done
+}
+
+set --
+i=0
+for id in $USB; do
+    if node=$(usb_node "$id"); then set -- "$@" "--dev$i" "$node,mode=0666"; i=$((i + 1)); echo "usb $id: $node"; else echo "usb $id: absent"; fi
+done
+for id in $HID; do
+    found=0
+    for node in $(hidraw_nodes "$id"); do set -- "$@" "--dev$i" "$node,mode=0666"; i=$((i + 1)); found=1; echo "hid $id: $node"; done
+    [ $found = 1 ] || echo "hid $id: absent"
+done
+# Drop entries left over from devices that are gone (one comma-separated list).
+stale=""
+for n in $(seq "$i" 9); do grep -q "^dev$n:" "$CONF" && stale="${stale:+$stale,}dev$n"; done
+[ -n "$stale" ] && set -- "$@" --delete "$stale"
+[ $# -gt 0 ] && pct set "$CT" "$@"
+exit 0

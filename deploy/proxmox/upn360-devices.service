@@ -1,0 +1,12 @@
+[Unit]
+Description=Unbounded Panorama 360: point the container at the current screen and RGB device nodes
+After=pve-cluster.service systemd-udev-settle.service
+Requires=pve-cluster.service
+Before=pve-guests.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/upn360-devices
+
+[Install]
+WantedBy=multi-user.target

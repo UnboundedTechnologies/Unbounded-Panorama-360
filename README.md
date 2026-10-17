@@ -84,13 +84,19 @@ Windows SmartScreen may say the publisher is unknown, because the installer is n
 
 Updating is just as easy: run a newer setup and it updates in place, keeping your designs, presets and library. Uninstall any time from Windows Settings, Apps.
 
+### 🖥️ On a home server: the container edition
+
+Cooler screen in a server? The **container edition** runs in a small Proxmox (or any Linux) container and gives you the same studio **in your browser**: live preview, text and live values, YouTube import, drawing, and the ARGB page. It shows server statistics too (host CPU, memory, network, storage, every VM and container) and starts with the server. It drives **Thermalright screens** (Frozen Warframe Pro, GrandVision, Mjolnir Vision) and every RGB device OpenRGB supports.
+
+Setup takes a few minutes: see the [container guide](docs/CONTAINER.md).
+
 ## Open source
 
 Unbounded Panorama 360 is **free and open source** under the [MIT license](LICENSE). Every line of code is right here: read it, build it, change it, share it.
 
 - **No account, no telemetry, no ads.** The app talks to your cooler over USB and to nothing else (except YouTube and winget when you ask it to).
 - **Contributions are welcome.** Found a bug, have an idea, own a Panorama SE or WB? Open an [issue](https://github.com/UnboundedTechnologies/Unbounded-Panorama-360/issues) or a pull request.
-- **Tested**: 50 automated tests cover layout, snapping, video conversion and the two-media composition.
+- **Tested**: 83 automated tests cover layout, snapping, video conversion, the two-media composition, lighting and the container edition's screen protocol.
 
 ### Build it yourself
 

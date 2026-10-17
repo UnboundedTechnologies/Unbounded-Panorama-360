@@ -6,20 +6,23 @@ public static class Tools
     // winget package folder prefixes, in order of preference.
     private static readonly string[] FfmpegPackages = ["Gyan.FFmpeg", "yt-dlp.FFmpeg", "BtbN.FFmpeg"];
 
-    private static readonly Lazy<string> Ffmpeg = new(() => Find("ffmpeg.exe", FfmpegPackages, "Gyan.FFmpeg.Essentials"));
-    private static readonly Lazy<string> Ffprobe = new(() => Find("ffprobe.exe", FfmpegPackages, "Gyan.FFmpeg.Essentials"));
-    private static readonly Lazy<string> YtDlp = new(() => Find("yt-dlp.exe", ["yt-dlp.yt-dlp"], "yt-dlp.yt-dlp"));
+    private static readonly Lazy<string> Ffmpeg = new(() => Find(Exe("ffmpeg"), FfmpegPackages, "Gyan.FFmpeg.Essentials"));
+    private static readonly Lazy<string> Ffprobe = new(() => Find(Exe("ffprobe"), FfmpegPackages, "Gyan.FFmpeg.Essentials"));
+    private static readonly Lazy<string> YtDlp = new(() => Find(Exe("yt-dlp"), ["yt-dlp.yt-dlp"], "yt-dlp.yt-dlp"));
     private static readonly Lazy<string?> Deno = new(() =>
     {
         try
         {
-            return Find("deno.exe", ["DenoLand.Deno"], "DenoLand.Deno");
+            return Find(Exe("deno"), ["DenoLand.Deno"], "DenoLand.Deno");
         }
         catch (FileNotFoundException)
         {
             return null;
         }
     });
+
+    /// <summary>The file name of a tool on this platform ("ffmpeg.exe" on Windows, "ffmpeg" on Linux).</summary>
+    private static string Exe(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
 
     public static string FfmpegPath => Ffmpeg.Value;
     public static string FfprobePath => Ffprobe.Value;
@@ -67,7 +70,9 @@ public static class Tools
             if (File.Exists(candidate))
                 return candidate;
         }
-        throw new FileNotFoundException($"{exe} was not found. Re-run the Unbounded Panorama 360 setup, or install it with: winget install {installHint}");
+        throw new FileNotFoundException(OperatingSystem.IsWindows()
+            ? $"{exe} was not found. Re-run the Unbounded Panorama 360 setup, or install it with: winget install {installHint}"
+            : $"{exe} was not found on PATH. Re-run the Unbounded Panorama 360 installer.");
     }
 
     private static IEnumerable<string> SafeFiles(string dir, string exe)

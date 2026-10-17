@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unbounded Panorama 360</title>
+  <meta name="description" content="Design your cooler screen and control every RGB device, from the browser.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <nav class="sidebar">
+      <a class="brand" href="#/studio">
+        <img src="logo.svg" alt="">
+        <span><b>UNBOUNDED</b><small>PANORAMA 360</small></span>
+      </a>
+      <a class="nav" data-page="studio" href="#/studio"><i>&#x25A3;</i><span>Studio</span></a>
+      <a class="nav" data-page="library" href="#/library"><i>&#x25A6;</i><span>Library</span></a>
+      <a class="nav" data-page="argb" href="#/argb"><i>&#x25C9;</i><span>ARGB</span></a>
+      <a class="nav" data-page="settings" href="#/settings"><i>&#x2699;</i><span>Settings</span></a>
+      <div class="nav-status" id="navStatus"></div>
+    </nav>
+    <main id="page"></main>
+  </div>
+  <div id="signin" class="overlay" hidden>
+    <form class="card signin">
+      <img src="logo.svg" alt="" width="56">
+      <h2>Sign in</h2>
+      <p class="muted">This page is protected by a password.</p>
+      <input type="password" name="password" placeholder="Password" autocomplete="current-password" required>
+      <p class="error" hidden></p>
+      <button class="primary" type="submit">Sign in</button>
+    </form>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

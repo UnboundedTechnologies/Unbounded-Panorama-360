@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Unbounded.Panorama.Core\Unbounded.Panorama.Core.csproj" />
     <ProjectReference Include="..\..\src\Unbounded.Panorama.App\Unbounded.Panorama.App.csproj" />
+    <ProjectReference Include="..\..\src\Unbounded.Panorama.Server\Unbounded.Panorama.Server.csproj" />
   </ItemGroup>
 
 </Project>

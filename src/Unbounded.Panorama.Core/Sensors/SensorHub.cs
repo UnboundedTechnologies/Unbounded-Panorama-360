@@ -3,21 +3,11 @@ using LibreHardwareMonitor.Hardware;
 
 namespace Unbounded.Panorama.Sensors;
 
-public sealed record SensorInfo(string Id, string Category, string Hardware, string Name, string Type, string Unit)
-{
-    public string Display => $"{Category} {Hardware} › {Name} ({Type})";
-
-    /// <summary>Group header in the picker, e.g. "CPU · AMD Ryzen 7 9800X3D".</summary>
-    public string Group => $"{Category} · {Hardware}";
-
-    public int CategoryOrder => Array.IndexOf(SensorHub.CategoryOrder, Category) is var i and >= 0 ? i : 99;
-}
-
 /// <summary>
 /// LibreHardwareMonitor wrapper. CPU temperature, clocks and power need administrator
 /// rights (PawnIO driver); GPU, load and memory work without.
 /// </summary>
-public sealed class SensorHub : IDisposable
+public sealed class SensorHub : ISensorReadings, IDisposable
 {
     private static readonly SensorType[] Useful =
     [
@@ -193,7 +183,7 @@ public sealed class SensorHub : IDisposable
         Updated?.Invoke();
     }
 
-    public static readonly string[] CategoryOrder = ["CPU", "GPU", "Memory", "Motherboard", "Storage", "Network", "Other"];
+    public static readonly string[] CategoryOrder = SensorCategories.Order;
 
     private static string CategoryOf(HardwareType type) => type switch
     {

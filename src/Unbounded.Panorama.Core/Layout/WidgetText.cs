@@ -4,7 +4,7 @@ using Unbounded.Panorama.Sensors;
 namespace Unbounded.Panorama.Layout;
 
 /// <summary>Resolves the text a widget shows right now.</summary>
-public sealed class WidgetText(SensorHub sensors)
+public sealed class WidgetText(ISensorReadings sensors)
 {
     public string Resolve(Widget w, bool fahrenheit)
     {

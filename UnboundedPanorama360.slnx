@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Unbounded.Panorama.App/Unbounded.Panorama.App.csproj" />
     <Project Path="src/Unbounded.Panorama.Core/Unbounded.Panorama.Core.csproj" />
+    <Project Path="src/Unbounded.Panorama.Server/Unbounded.Panorama.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Unbounded.Panorama.Tests/Unbounded.Panorama.Tests.csproj" />
