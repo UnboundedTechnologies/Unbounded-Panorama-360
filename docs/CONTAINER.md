@@ -38,20 +38,29 @@ pct create 116 local:vztmpl/debian-13-standard_13.1-2_amd64.tar.zst --hostname r
 
 ## 2. Pass the devices through
 
-Find your devices with `lsusb` on the host (the screen, and the motherboard's RGB controller if it is a
-USB device, for example `1462:7d98` for MSI Mystic Light). Their numbers can change between boots, so a
-small host service updates the container before the guests start:
+Find your devices on the host:
+
+- **The screen and USB RGB controllers** with `lsusb` (for example `1462:7d98` for MSI Mystic Light, which
+  drives the motherboard's ARGB headers and fan hubs).
+- **RGB RAM** sits on the motherboard's SMBus. List the adapters with
+  `grep . /sys/bus/i2c/devices/i2c-*/name`: on Intel boards it is `SMBus I801 adapter`, on AMD
+  `SMBus PIIX4 adapter`. Proxmox's kernel has `i2c-dev` built in, so its `/dev/i2c-N` node is already
+  there (on another Linux host: `modprobe i2c-dev`, and add `i2c-dev` to `/etc/modules`).
+
+Their numbers can change between boots, so a small host service updates the container before the guests
+start (adapters are matched by name, so a new number is no problem):
 
 ```sh
 cp deploy/proxmox/upn360-devices /usr/local/sbin/ && chmod 755 /usr/local/sbin/upn360-devices
 cp deploy/proxmox/upn360-devices.service /etc/systemd/system/
-printf 'CT=116\nUSB="87ad:70db"\nHID="1462:7d98"\n' > /etc/default/upn360-devices
+printf 'CT=116\nUSB="87ad:70db"\nHID="1462:7d98"\nI2C="SMBus I801"\n' > /etc/default/upn360-devices
 systemctl daemon-reload && systemctl enable --now upn360-devices
 pct start 116
 ```
 
-Motherboard RGB on an SMBus (most ASUS boards, RAM sticks) cannot be reached from a container; USB
-controllers (MSI Mystic Light, fan hubs, keyboards) can.
+Verified with Corsair Vengeance RGB Pro DDR4 on an Intel SMBus: both sticks are detected and follow the
+lighting from the container. Leave `I2C` empty if you have no RGB RAM; the container then never touches
+the SMBus.
 
 ## 3. Optional: server statistics
 

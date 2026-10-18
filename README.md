@@ -88,7 +88,7 @@ Cooler in a home server instead? The **container edition** runs on Proxmox (or a
 - **Exact loops**: the screen plays precisely the section you chose, frame for frame, never a second early or late.
 - **A library** of everything you added, with videos that play their own loop when you point at them.
 - **Server statistics** for your widgets: CPU, NVMe and RAM temperatures, plus host CPU, memory, load, uptime, network speed, storage and **every VM and container** through a read-only Proxmox token.
-- **ARGB for the server** too: motherboard headers, fan hubs and every USB RGB device OpenRGB supports, with sync, profiles and the automatic check and repair.
+- **ARGB for the server** too: motherboard headers, fan hubs, **RGB RAM** (through the motherboard's SMBus) and every USB RGB device OpenRGB supports, with sync, profiles and the automatic check and repair.
 - **Runs by itself**: starts with the server, restores the design and the lighting, and uses about 6 % of one CPU core.
 - **Light on memory**: about 190 MB for the app, so a 1 GB container is plenty, even while you scrub through a YouTube video (only the frames you are looking at are fetched; the ones you moved past are cancelled).
 - **Optional password** for the page.
@@ -158,7 +158,8 @@ The cooler appears to Windows as a USB printer-class device bound to the in-box 
 
 Your design becomes two things: an **overlay** of text groups the cooler's firmware draws itself (so live values are cheap to update) and **one H.264 video** for the background, which FFmpeg composes from your photos, videos and drawing.
 
-RGB goes through the OpenRGB service on `127.0.0.1:6742`. The app works around two OpenRGB 1.0 bugs, both confirmed in its source and on hardware:
+RGB goes through the OpenRGB service on `127.0.0.1:6742`. The app works around three OpenRGB 1.0 problems, all confirmed on hardware:
+- **The same RAM listed twice.** AMD's SMBus (PIIX4) has several ports, and OpenRGB can list the same sticks on two of them (on an X870 board: 4 "sticks" for 2; a colour sent only to the second port lit both real ones). Writing both paths at once collides on the bus and leaves the RAM dark, which looked like settings flashing and never applying. The app keeps one path per stick: the same chip at the same address, with the same firmware and LED count, on another port of the same controller is the same stick.
 - **Modes without a direction** (Static, Off, Breathing…) are reported with direction `0xFFFFFFFF` but only accepted with `0`, and a request with the reported value is dropped without an error. The app sends mode changes itself with the value OpenRGB accepts.
 - **A device detected again while OpenRGB runs** (unplugged and plugged back in, or after a rescan) gets a new internal ID that OpenRGB then checks as a list position, so every command for it is dropped while it stays listed (fixed in OpenRGB 1.1). The app listens for OpenRGB's device-list notice, reads every device back after re-applying, and restarts the service when a device ignored its settings: again after each replug, otherwise at most once every 10 minutes and 3 times an hour. Each step is written to `lighting.log`.
 

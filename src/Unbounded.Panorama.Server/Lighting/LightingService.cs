@@ -101,7 +101,8 @@ public sealed class LightingService : BackgroundService
             Status = $"Waiting for the OpenRGB service… ({_hub.LastError})";
             return;
         }
-        Status = $"{_hub.Devices.Count} RGB device{(_hub.Devices.Count == 1 ? "" : "s")} found, {_hub.Devices.Sum(d => d.LedCount)} LEDs";
+        Status = $"{_hub.Devices.Count} RGB device{(_hub.Devices.Count == 1 ? "" : "s")} found, {_hub.Devices.Sum(d => d.LedCount)} LEDs"
+            + (_hub.AliasesIgnored > 0 ? $" ({_hub.AliasesIgnored} duplicate SMBus path{(_hub.AliasesIgnored == 1 ? "" : "s")} to the same RAM ignored)" : "");
         if (apply && _configured)
         {
             _checkNext = true;

@@ -6,10 +6,12 @@
 #   CT=116                      # the container
 #   USB="87ad:70db"             # raw USB devices (screens), vendor:product, space-separated
 #   HID="1462:7d98"             # HID devices for OpenRGB (motherboard RGB…), vendor:product
+#   I2C="SMBus I801"            # SMBus adapters for RAM lighting, by name prefix (/sys/bus/i2c/devices/i2c-*/name); several: separate with ;
 set -eu
 CT=116
 USB="87ad:70db"
 HID=""
+I2C=""
 [ -f /etc/default/upn360-devices ] && . /etc/default/upn360-devices
 CONF=/etc/pve/lxc/$CT.conf
 [ -f "$CONF" ] || { echo "upn360-devices: $CONF missing, nothing to do"; exit 0; }
@@ -34,6 +36,13 @@ hidraw_nodes() {
     done
 }
 
+i2c_nodes() {
+    for a in /sys/bus/i2c/devices/i2c-*; do
+        [ -e "$a/name" ] || continue
+        case "$(cat "$a/name")" in "$1"*) echo "/dev/$(basename "$a")" ;; esac
+    done
+}
+
 set --
 i=0
 for id in $USB; do
@@ -44,6 +53,15 @@ for id in $HID; do
     for node in $(hidraw_nodes "$id"); do set -- "$@" "--dev$i" "$node,mode=0666"; i=$((i + 1)); found=1; echo "hid $id: $node"; done
     [ $found = 1 ] || echo "hid $id: absent"
 done
+# RAM lighting goes over the SMBus: pass the adapter whose name starts with each I2C entry (its number can change).
+old_ifs=$IFS; IFS=";"
+for name in $I2C; do
+    IFS=$old_ifs
+    found=0
+    for node in $(i2c_nodes "$name"); do set -- "$@" "--dev$i" "$node,mode=0666"; i=$((i + 1)); found=1; echo "i2c $name: $node"; done
+    [ $found = 1 ] || echo "i2c $name: absent"
+done
+IFS=$old_ifs
 # Drop entries left over from devices that are gone (one comma-separated list).
 stale=""
 for n in $(seq "$i" 9); do grep -q "^dev$n:" "$CONF" && stale="${stale:+$stale,}dev$n"; done

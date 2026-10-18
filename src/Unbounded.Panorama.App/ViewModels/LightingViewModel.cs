@@ -139,7 +139,8 @@ public sealed partial class LightingViewModel : ObservableObject, IDisposable
             return;
         }
         Rebuild();
-        StatusText = $"{Devices.Count} RGB device{(Devices.Count == 1 ? "" : "s")} found, {Devices.Sum(d => d.Info.LedCount)} LEDs";
+        StatusText = $"{Devices.Count} RGB device{(Devices.Count == 1 ? "" : "s")} found, {Devices.Sum(d => d.Info.LedCount)} LEDs"
+            + (_hub.AliasesIgnored > 0 ? $" ({_hub.AliasesIgnored} duplicate SMBus path{(_hub.AliasesIgnored == 1 ? "" : "s")} to the same RAM ignored)" : "");
         if (apply && _configured)
         {
             _checkNext = true;

@@ -49,7 +49,7 @@ public sealed class RgbHub : IDisposable
                     _client?.Dispose();
                     _client = new OpenRgbClient(name: "Unbounded Panorama 360", autoConnect: true, timeoutMs: 2000);
                 }
-                _devices = [.. _client.GetAllControllerData().Select(Map)];
+                _devices = Read(_client);
                 LastError = null;
                 return true;
             }
@@ -90,7 +90,7 @@ public sealed class RgbHub : IDisposable
                 }
             }
             if (resized)
-                _devices = [.. client.GetAllControllerData().Select(Map)];
+                _devices = Read(client);
         }
     }
 
@@ -158,6 +158,54 @@ public sealed class RgbHub : IDisposable
             }
             return saved;
         }
+    }
+
+    /// <summary>How many duplicate SMBus paths to an already listed device were left out at the last read.</summary>
+    public int AliasesIgnored { get; private set; }
+
+    /// <summary>Every device once: second SMBus paths to the same chip are left out (see <see cref="SmbusAliases"/>).</summary>
+    private List<RgbDevice> Read(OpenRgbClient client)
+    {
+        var all = client.GetAllControllerData();
+        var aliases = SmbusAliases([.. all.Select(d => new SmbusDevice(d.Index, d.Name, d.Location, d.Version ?? "", d.Leds.Length))]);
+        AliasesIgnored = aliases.Count;
+        return [.. all.Where(d => !aliases.Contains(d.Index)).Select(Map)];
+    }
+
+    public sealed record SmbusDevice(int Index, string Name, string Location, string Version, int Leds);
+
+    private static readonly System.Text.RegularExpressions.Regex SmbusLocation =
+        new(@"^I2C: (?<bus>.+?) (?<port>\d+), address (?<address>0x[0-9A-Fa-f]+)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Devices reached a second time through another port of the same SMBus controller. AMD's PIIX4
+    /// SMBus has several ports; OpenRGB 1.0 can list the same RAM sticks on two of them (verified on
+    /// an X870 board: 4 "sticks" for 2, and a colour sent only to port 1 lit both real sticks). Writing
+    /// both at once collides on the bus and leaves the RAM dark, so only the lowest port is kept:
+    /// same chip, same address, same firmware and LED count on another port is the same device.
+    /// </summary>
+    public static IReadOnlySet<int> SmbusAliases(IReadOnlyList<SmbusDevice> devices)
+    {
+        var aliases = new HashSet<int>();
+        var seen = new Dictionary<string, (int Port, int Index)>();
+        foreach (var d in devices
+            .Select(d => (Device: d, Match: SmbusLocation.Match(d.Location)))
+            .Where(x => x.Match.Success)
+            .OrderBy(x => int.Parse(x.Match.Groups["port"].Value, System.Globalization.CultureInfo.InvariantCulture)))
+        {
+            var port = int.Parse(d.Match.Groups["port"].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var key = $"{d.Device.Name}|{d.Match.Groups["bus"].Value}|{d.Match.Groups["address"].Value.ToLowerInvariant()}|{d.Device.Version}|{d.Device.Leds}";
+            if (seen.TryGetValue(key, out var first))
+            {
+                if (first.Port != port)
+                    aliases.Add(d.Device.Index);
+            }
+            else
+            {
+                seen[key] = (port, d.Device.Index);
+            }
+        }
+        return aliases;
     }
 
     /// <summary>OpenRGB MODE_FLAG_MANUAL_SAVE: the mode can be stored on the device (not named by OpenRGB.NET 3.1.1).</summary>
