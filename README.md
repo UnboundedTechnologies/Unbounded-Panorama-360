@@ -68,6 +68,7 @@ Cooler in a home server instead? The **container edition** runs on Proxmox (or a
 - **Unplug and replug freely**: a keyboard or any device plugged back in gets your lighting again within seconds.
 - **Checked, not assumed**: after start-up, sleep or a device change, the app reads every device back to make sure it really shows your settings, and repairs OpenRGB by itself when one does not. The page never shows "synced" for a device that is not.
 - **Every effect really applies**: Static, Off, Breathing and the rest reach the device even where OpenRGB 1.0 used to ignore them silently.
+- **RAM that keeps its colour**: on AMD boards where OpenRGB lists each stick twice, the app controls every stick once, so a change sticks instead of flashing and going dark, and the page shows your real number of sticks.
 - **Fan hubs and LED strips on ARGB headers**: set how many LEDs are connected, name the header, and they join in.
 - **Profiles** to switch looks, restored automatically at start-up and after sleep, and saved into devices that have memory for it.
 - **Replaces Armoury Crate's lighting** with one click (the rest of Armoury Crate stays).
